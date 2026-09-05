@@ -23,7 +23,9 @@ class DockerSpecialist(Specialist):
             text = (repo / "Dockerfile").read_text(encoding="utf-8", errors="replace")
             stages = len(re.findall(r"^FROM\s", text, re.M))
             exposed = re.findall(r"^EXPOSE\s+(\d+)", text, re.M)
-            inv.log.fact(f"Dockerfile: {stages} stage(s), EXPOSE {exposed or 'none'}, base {re.search(r'^FROM\s+(\S+)', text, re.M).group(1) if stages else '?'}.",
+            base_match = re.search(r"^FROM\s+(\S+)", text, re.M)
+            base = base_match.group(1) if base_match else "?"
+            inv.log.fact(f"Dockerfile: {stages} stage(s), EXPOSE {exposed or 'none'}, base {base}.",
                          source="Dockerfile", dockerfile_stages=stages, dockerfile_expose=exposed)
         res = self.call(inv, "docker_ps", {"all": True}, purpose="list containers")
         if not res.ok:
