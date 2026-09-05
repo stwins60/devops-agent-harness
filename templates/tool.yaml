@@ -1,0 +1,19 @@
+# Template for a new tool manifest (see docs/tools.md). Implement it in tools/<domain>/tools.py.
+name: my_tool
+description: What the tool does, in one sentence.
+risk_level: low              # low | medium | high | critical
+requires_approval: false
+permission: READ             # READ | ANALYZE | MODIFY | DEPLOY | DESTROY
+permissions:
+  - domain.read
+input_schema:
+  type: object
+  properties:
+    name: { type: string }
+  required: [name]
+output_schema:
+  type: object
+timeout: 60
+rollback: null               # required for mutating tools: description or template, or "NOT AVAILABLE: ..."
+category: domain
+mutating: false

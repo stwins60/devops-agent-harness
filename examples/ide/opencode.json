@@ -1,0 +1,54 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "devops-agent": {
+      "type": "local",
+      "command": ["devops-agent", "--project-root", "/path/to/repo", "--mode", "approval", "mcp-serve"],
+      "enabled": true
+    }
+  },
+  "agent": {
+    "devops": {
+      "description": "DevOps engineer using the governed devops-agent harness tools (policy + audit enforced)",
+      "mode": "primary",
+      "prompt": "{file:/path/to/repo/AGENTS.md}",
+      "tools": {
+        "devops-agent*": true,
+        "atlassian*": false,
+        "github*": false,
+        "gitlab*": false
+      }
+    },
+    "devops-readonly": {
+      "description": "Read-only DevOps investigation: evidence-backed diagnosis, never mutates",
+      "mode": "primary",
+      "prompt": "{file:/path/to/repo/AGENTS.md}\n\nYou are in READ-ONLY mode: only inspect, never change anything.",
+      "tools": {
+        "devops-agent*": true,
+        "atlassian*": false,
+        "github*": false,
+        "gitlab*": false,
+        "devops-agent_kubectl_apply": false,
+        "devops-agent_kubectl_delete": false,
+        "devops-agent_kubectl_rollout_restart": false,
+        "devops-agent_kubectl_rollout_undo": false,
+        "devops-agent_git_push": false,
+        "devops-agent_github_create_pr": false,
+        "devops-agent_gitlab_create_mr": false,
+        "devops-agent_terraform_apply": false,
+        "devops-agent_terraform_destroy": false,
+        "devops-agent_aws_modify": false,
+        "devops-agent_aws_destroy": false,
+        "devops-agent_linux_service_restart": false,
+        "devops-agent_ansible_run": false,
+        "devops-agent_fs_write": false,
+        "devops-agent_fs_replace": false,
+        "devops-agent_shell_run": false,
+        "devops-agent_jira_transition": false,
+        "devops-agent_jira_update_fields": false,
+        "devops-agent_jira_create_subtask": false,
+        "devops-agent_docker_restart": false
+      }
+    }
+  }
+}

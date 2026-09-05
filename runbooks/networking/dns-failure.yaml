@@ -1,0 +1,38 @@
+name: networking-dns-failure
+description: Clients cannot resolve or reach a service hostname.
+trigger:
+  - dns failure
+  - name resolution
+  - cannot resolve
+  - connection refused
+  - unreachable host
+severity: high
+tags: [networking, dns]
+prechecks:
+  - description: Resolve the hostname from the affected client and from a known-good resolver
+    tool: net_dns_lookup
+    args: { host: $host }
+diagnosis:
+  - description: Check TCP reachability of the service port
+    tool: net_tcp_check
+    args: { host: $host, port: 443 }
+  - description: Check the HTTP response and TLS handshake
+    tool: net_http_check
+    args: { url: $url }
+  - description: Compare resolver config (/etc/resolv.conf, CoreDNS) and recent DNS/Route53 changes
+commands:
+  - dig +short <host>
+  - nc -zv <host> <port>
+  - curl -sv https://<host>/healthz
+expected_results:
+  - NXDOMAIN/SERVFAIL => zone or resolver issue; resolved but refused => service/firewall; 5xx => backend
+remediation:
+  - description: Restore the DNS record / resolver configuration or open the firewall path
+    approval_required: true
+validation:
+  - description: Resolution and TCP/HTTP checks succeed from the affected client
+    tool: net_http_check
+    args: { url: $url }
+rollback:
+  - description: Revert the DNS/firewall change
+approval_required: true

@@ -1,0 +1,40 @@
+name: linux-disk-full
+description: A filesystem is (almost) full and services fail with ENOSPC.
+trigger:
+  - disk full
+  - no space left on device
+  - filesystem full
+  - disk space
+severity: high
+tags: [linux, disk, storage]
+prechecks:
+  - description: Identify the full filesystem and mount point
+    tool: linux_disk_usage
+diagnosis:
+  - description: Find the largest directories under the mount point
+    tool: linux_dir_usage
+    args: { path: /var }
+  - description: Find the largest files (logs, core dumps, caches)
+    tool: linux_largest_files
+    args: { path: /var/log }
+  - description: Check for deleted-but-open files held by processes (lsof +L1)
+commands:
+  - df -h
+  - du -sh /var/* | sort -rh | head
+  - ls -lS /var/log | head
+  - lsof +L1
+expected_results:
+  - One directory (usually logs, docker, or cache) accounts for most usage
+remediation:
+  - description: Archive then truncate/rotate oversized logs (journalctl --vacuum-size, logrotate -f); prune caches; never delete data without a backup
+    approval_required: true
+  - description: Restart the affected service once space is available
+    tool: linux_service_restart
+    args: { unit: $service }
+    approval_required: true
+validation:
+  - description: df shows usage below 80 %; the service is active and its journal is free of ENOSPC
+    tool: linux_disk_usage
+rollback:
+  - description: Restore archived logs if they are needed for forensics (deletion itself cannot be undone)
+approval_required: true

@@ -1,0 +1,35 @@
+name: kubernetes-pending-pods
+description: Pods stuck in Pending because they cannot be scheduled (insufficient resources, taints, affinity, PVC binding).
+trigger:
+  - pods pending
+  - failedscheduling
+  - unschedulable
+  - insufficient cpu
+  - insufficient memory
+severity: medium
+tags: [kubernetes, scheduling]
+prechecks:
+  - description: Identify the Pending pods and their requested resources
+    tool: kubectl_get
+    args: { kind: pods, namespace: $namespace }
+diagnosis:
+  - description: Read FailedScheduling events for the scheduler's reason
+    tool: kubectl_events
+    args: { namespace: $namespace }
+  - description: Compare node allocatable resources, taints and labels with pod requests, tolerations and affinity
+    tool: kubectl_get_nodes
+  - description: Check PVC binding status when volumes are involved
+commands:
+  - kubectl describe pod <pod> -n <ns>
+  - kubectl get nodes -o json | jq '.items[].status.allocatable'
+  - kubectl get pvc -n <ns>
+expected_results:
+  - The scheduler message names the blocking predicate (Insufficient cpu/memory, untolerated taint, volume node affinity)
+remediation:
+  - description: Lower resource requests to realistic values, or add tolerations / fix affinity, or scale the node group
+    approval_required: true
+validation:
+  - description: Pods leave Pending and become Ready; no new FailedScheduling events
+rollback:
+  - description: Restore the previous requests/tolerations or node group size
+approval_required: true

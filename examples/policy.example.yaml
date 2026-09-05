@@ -1,0 +1,18 @@
+# Copy to .agent/policy.yaml to make the default policy STRICTER for a project.
+# Anything that would relax policies/default.yaml is ignored.
+version: 1
+environments:
+  dev:
+    auto_allow_max_permission: ANALYZE     # tighter than the default MODIFY
+    require_approval: [kubectl_apply]
+protected_branches: [develop, "hotfix/*"]
+forbidden_tools: [aws_destroy, terraform_destroy]
+tool_overrides:
+  linux_service_restart: { requires_approval: true, risk_level: high }
+commands:
+  - pattern: "^helm\\s+upgrade\\b.*--force"
+    class: dangerous
+    permission: DESTROY
+    reason: helm --force recreates resources
+limits:
+  max_tool_calls: 120

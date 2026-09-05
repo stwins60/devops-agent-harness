@@ -1,0 +1,36 @@
+name: docker-container-exited
+description: A container exits immediately or restarts in a loop.
+trigger:
+  - container exited
+  - container keeps restarting
+  - docker container crash
+  - container not starting
+severity: medium
+tags: [docker, container]
+prechecks:
+  - description: List containers and note state / exit code
+    tool: docker_ps
+diagnosis:
+  - description: Inspect the container for exit code, OOMKilled and error
+    tool: docker_inspect
+    args: { container: $container }
+  - description: Read the last log lines for the failure reason
+    tool: docker_logs
+    args: { container: $container }
+  - description: Check port conflicts (address already in use) and missing mounts/env
+commands:
+  - docker ps -a
+  - docker inspect <container>
+  - docker logs --tail 100 <container>
+expected_results:
+  - Exit 137 + OOMKilled=true => memory limit; exit 1 with traceback => app error; 'address already in use' => port conflict
+remediation:
+  - description: Fix Dockerfile/compose (limits, ports, env, entrypoint) and rebuild; restart the container
+    tool: docker_restart
+    args: { container: $container }
+    approval_required: true
+validation:
+  - description: docker ps shows the container Up and logs show readiness
+rollback:
+  - description: Re-run the previous image tag
+approval_required: true

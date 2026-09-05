@@ -1,0 +1,41 @@
+# Local development environment: the harness + mock Jira/GitHub API server.
+# Optional profiles add LocalStack (AWS) and a kind cluster is documented in docs/development.md.
+services:
+  mock-api:
+    build: .
+    command: python -m apps.mockserver.server --host 0.0.0.0 --port 8089
+    ports:
+      - "8089:8089"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8089/healthz')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  agent:
+    build: .
+    depends_on:
+      mock-api:
+        condition: service_healthy
+    environment:
+      DEVOPS_AGENT_MOCK: "1"
+      DEVOPS_AGENT_NON_INTERACTIVE: "1"
+      # Point the REAL REST backends at the mock server when running without --mock:
+      JIRA_URL: http://mock-api:8089
+      JIRA_EMAIL: agent@example.com
+      JIRA_API_TOKEN: mock-token
+      GITHUB_API_URL: http://mock-api:8089
+      GITHUB_TOKEN: mock-token
+      DEVOPS_AGENT_GITHUB_REPO: example-org/sample-app
+    volumes:
+      - ./tasks:/app/tasks
+      - ./.agent:/app/.agent
+    command: python -m apps.cli.main --mock "Why is my Kubernetes API deployment failing?"
+
+  localstack:
+    profiles: ["aws"]
+    image: localstack/localstack:3
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: sts,iam,ec2,s3,logs,cloudwatch

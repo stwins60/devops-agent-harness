@@ -1,0 +1,32 @@
+# Template for a new runbook (see docs/runbooks.md). Place it under runbooks/<domain>/ or .agent/runbooks/.
+name: domain-short-name
+description: One sentence describing the failure or change this runbook covers.
+trigger:
+  - phrase that appears in requests
+  - another trigger phrase
+severity: medium                 # low | medium | high | critical
+tags: [domain]
+prechecks:
+  - description: What to verify before starting
+    tool: kubectl_current_context
+diagnosis:
+  - description: First diagnostic step (tool-backed steps become executable)
+    tool: kubectl_get
+    args: { kind: pods, namespace: $namespace }
+  - description: A manual/analytical step without a tool
+commands:
+  - human-readable equivalent commands
+expected_results:
+  - what a healthy vs faulty result looks like
+remediation:
+  - description: The fix; mark approval_required for mutations
+    tool: kubectl_rollout_undo
+    args: { kind: deployment, name: $deployment, namespace: $namespace }
+    approval_required: true
+validation:
+  - description: How to prove the remediation worked
+    tool: kubectl_rollout_status
+    args: { kind: deployment, name: $deployment, namespace: $namespace }
+rollback:
+  - description: How to undo the remediation (or state that it is not possible)
+approval_required: true

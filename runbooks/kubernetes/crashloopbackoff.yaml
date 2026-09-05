@@ -1,0 +1,57 @@
+name: kubernetes-crashloopbackoff
+description: Diagnose and remediate a Deployment whose pods are in CrashLoopBackOff or never become Ready.
+trigger:
+  - pod crashing
+  - crashloopbackoff
+  - deployment failing
+  - pods not ready
+  - readiness probe failed
+  - liveness probe failed
+severity: high
+tags: [kubernetes, deployment, probes]
+prechecks:
+  - description: Confirm the kubectl context maps to the expected environment
+    tool: kubectl_current_context
+  - description: Confirm the deployment exists and note desired vs ready replicas
+    tool: kubectl_get
+    args: { kind: deployment, name: $deployment, namespace: $namespace }
+diagnosis:
+  - description: List pods of the deployment and record phase, restarts, waiting reason and last exit code
+    tool: kubectl_get
+    args: { kind: pods, namespace: $namespace }
+  - description: Read Warning events (Unhealthy, BackOff, Killing, Failed)
+    tool: kubectl_events
+    args: { namespace: $namespace }
+  - description: Read current and previous container logs
+    tool: kubectl_logs
+    args: { pod: $pod, namespace: $namespace, previous: true }
+  - description: Compare readiness/liveness probe ports and paths with containerPorts and the port the app logs it listens on
+  - description: Compare memory limit with usage (kubectl top) when exit code is 137
+    tool: kubectl_top_pods
+    args: { namespace: $namespace }
+commands:
+  - kubectl get deployment <name> -n <ns> -o yaml
+  - kubectl get pods -n <ns> -l app=<name>
+  - kubectl describe pod <pod> -n <ns>
+  - kubectl logs <pod> -n <ns> --previous
+  - kubectl top pods -n <ns>
+expected_results:
+  - Exit code 137 with reason OOMKilled => memory limit; exit 137 without reason plus Killing events => liveness kill
+  - Unhealthy events with 'connection refused' on a port that is not a containerPort => probe port mismatch
+  - Exit code 1 with a traceback in --previous logs => application error
+remediation:
+  - description: Fix the manifest (probe port/path, memory limit, image tag, config) in the repository and open a pull request
+  - description: If production is down, roll back to the previous revision while the fix is reviewed
+    tool: kubectl_rollout_undo
+    args: { kind: deployment, name: $deployment, namespace: $namespace }
+    approval_required: true
+validation:
+  - description: kubectl rollout status reports the deployment successfully rolled out
+    tool: kubectl_rollout_status
+    args: { kind: deployment, name: $deployment, namespace: $namespace }
+  - description: All pods Ready, restart count stable, service endpoints populated
+rollback:
+  - description: kubectl rollout undo deployment/<name> -n <ns>
+    tool: kubectl_rollout_undo
+    args: { kind: deployment, name: $deployment, namespace: $namespace }
+approval_required: true

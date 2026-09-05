@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+tasks/
+!tasks/.gitkeep
+.agent/audit/
+.agent/memory/
+.agent/incidents/
+.agent/decisions/
+.agent/runbooks/
+.agent/architecture/
+.agent/conventions/
+.agent/plan.md

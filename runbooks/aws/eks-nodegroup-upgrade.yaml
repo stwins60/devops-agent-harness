@@ -1,0 +1,36 @@
+name: aws-eks-nodegroup-upgrade
+description: Upgrade an EKS managed node group to the control-plane version with a rolling replacement.
+trigger:
+  - eks node group upgrade
+  - upgrade eks nodes
+  - nodegroup version
+  - eks upgrade
+severity: high
+tags: [aws, eks, upgrade]
+prechecks:
+  - description: Verify the AWS account identity matches the intended environment
+    tool: aws_identity
+  - description: Record cluster and node group versions
+    tool: aws_describe
+    args: { service: eks, operation: describe-cluster, params: { name: $cluster } }
+diagnosis:
+  - description: Confirm version skew (node group must not be more than one minor version behind)
+    tool: aws_describe
+    args: { service: eks, operation: describe-nodegroup, params: { cluster-name: $cluster, nodegroup-name: workers-a } }
+commands:
+  - aws eks describe-cluster --name <cluster>
+  - aws eks describe-nodegroup --cluster-name <cluster> --nodegroup-name <ng>
+expected_results:
+  - Node group status ACTIVE; updateConfig maxUnavailable set; no in-progress updates
+remediation:
+  - description: Change the node group version / release_version in Terraform and review the plan
+    tool: terraform_plan
+  - description: Apply (managed rolling update; AWS respects PodDisruptionBudgets)
+    tool: terraform_apply
+    approval_required: true
+validation:
+  - description: describe-nodegroup shows the new version and status ACTIVE; kubectl get nodes shows the new kubelet
+    tool: kubectl_get_nodes
+rollback:
+  - description: Set the previous version in Terraform and apply again (another rolling replacement)
+approval_required: true

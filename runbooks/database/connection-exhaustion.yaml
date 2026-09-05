@@ -1,0 +1,32 @@
+name: database-connection-exhaustion
+description: Application errors with 'too many connections' / connection pool exhausted.
+trigger:
+  - too many connections
+  - connection pool exhausted
+  - database connections
+  - db connection errors
+severity: high
+tags: [database, postgres, mysql, rds]
+prechecks:
+  - description: Confirm the database instance is available
+    tool: aws_describe
+    args: { service: rds, operation: describe-db-instances, params: {} }
+diagnosis:
+  - description: Compare active connections with max_connections (CloudWatch DatabaseConnections)
+    tool: aws_describe
+    args: { service: cloudwatch, operation: get-metric-statistics, params: {} }
+  - description: Identify which clients hold connections (pg_stat_activity / processlist) and whether pods scaled up recently
+  - description: Correlate with deployments (new pool sizes, missing connection release)
+commands:
+  - psql -c "select usename, count(*) from pg_stat_activity group by 1"
+  - aws cloudwatch get-metric-statistics --namespace AWS/RDS --metric-name DatabaseConnections
+expected_results:
+  - Connections near max_connections; a single service dominates
+remediation:
+  - description: Add/size a connection pooler (PgBouncer/RDS Proxy) or lower per-pod pool sizes; as an emergency, scale down the offending client
+    approval_required: true
+validation:
+  - description: DatabaseConnections stays below 80 % of max and application errors stop
+rollback:
+  - description: Restore previous pool settings / replica counts
+approval_required: true

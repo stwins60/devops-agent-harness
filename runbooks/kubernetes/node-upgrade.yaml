@@ -1,0 +1,51 @@
+name: kubernetes-worker-node-upgrade
+description: Upgrade Kubernetes worker nodes (managed node group or self-managed) one version at a time with zero-downtime rolling replacement.
+trigger:
+  - upgrade kubernetes worker nodes
+  - upgrade worker nodes
+  - upgrade nodes
+  - node upgrade
+  - upgrade node group
+  - kubernetes upgrade
+severity: high
+tags: [kubernetes, nodes, upgrade, eks]
+prechecks:
+  - description: Record current control-plane version and every node's kubelet version (skew must stay within one minor version)
+    tool: kubectl_get_nodes
+  - description: Confirm every node is Ready and no pods are Pending before starting
+    tool: kubectl_get
+    args: { kind: pods, all_namespaces: true }
+  - description: Confirm PodDisruptionBudgets exist for critical workloads and allow at least one disruption
+  - description: Confirm the cluster autoscaler / Karpenter will not fight the rolling update (pause scaling if needed)
+  - description: Verify recent etcd/velero backups exist
+diagnosis:
+  - description: Review the node group definition (version, AMI, maxUnavailable/maxSurge) in Terraform or the cloud console
+    tool: aws_describe
+    args: { service: eks, operation: describe-nodegroup, params: { cluster-name: $cluster, nodegroup-name: workers-a } }
+  - description: Review deprecated API usage for the target version (kubectl deprecations / pluto)
+commands:
+  - kubectl get nodes -o wide
+  - kubectl get pdb -A
+  - aws eks describe-cluster --name <cluster>
+  - aws eks describe-nodegroup --cluster-name <cluster> --nodegroup-name <ng>
+  - terraform plan
+expected_results:
+  - Node kubelet version is at most one minor behind the control plane before AND after the upgrade
+  - Each node is cordoned, drained (respecting PDBs) and replaced; workloads reschedule without user-facing errors
+remediation:
+  - description: Update the node group version / AMI release in Terraform (one minor version at a time) and review terraform plan
+    tool: terraform_plan
+  - description: Apply the Terraform change to start the managed rolling update (surge node added, old node cordoned + drained, repeat)
+    tool: terraform_apply
+    approval_required: true
+  - description: Watch node replacement and pod rescheduling; pause if PDB violations or Pending pods appear
+    tool: kubectl_get_nodes
+validation:
+  - description: All nodes Ready on the new kubelet version
+    tool: kubectl_get_nodes
+  - description: No Pending or CrashLoopBackOff pods cluster-wide; deployments report all replicas available
+  - description: Application SLOs (error rate, p95 latency) unchanged during and after the rollout
+rollback:
+  - description: Restore the previous node group version in Terraform, plan and apply (a new rolling replacement back to the old AMI)
+  - description: For self-managed nodes, scale the old launch template's group back up and drain the new nodes
+approval_required: true

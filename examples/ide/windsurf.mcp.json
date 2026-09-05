@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "devops-agent": {
+      "command": "devops-agent",
+      "args": ["--project-root", "/path/to/repo", "--mode", "approval", "mcp-serve"]
+    }
+  }
+}

@@ -1,0 +1,39 @@
+name: linux-service-failed
+description: A systemd unit is in failed state or flapping.
+trigger:
+  - service failed
+  - systemd unit failed
+  - service not starting
+  - service down
+severity: high
+tags: [linux, systemd]
+prechecks:
+  - description: List failed units
+    tool: linux_failed_units
+diagnosis:
+  - description: Read the unit status (exit code, main PID, restart counter)
+    tool: linux_service_status
+    args: { unit: $service }
+  - description: Read the unit journal for the failure reason
+    tool: linux_journal
+    args: { unit: $service, lines: 100 }
+  - description: Check disk, memory and listening-port conflicts
+    tool: linux_disk_usage
+commands:
+  - systemctl status <unit>
+  - journalctl -u <unit> -n 100 --no-pager
+  - ss -tulpn
+expected_results:
+  - The journal names the error (config, missing file, port in use, ENOSPC, permission)
+remediation:
+  - description: Fix the underlying cause (config, permissions, disk) via configuration management, then restart the unit
+    tool: linux_service_restart
+    args: { unit: $service }
+    approval_required: true
+validation:
+  - description: systemctl is-active reports active and the journal is clean for 5 minutes
+    tool: linux_service_status
+    args: { unit: $service }
+rollback:
+  - description: Restore the previous configuration from configuration management and restart
+approval_required: true

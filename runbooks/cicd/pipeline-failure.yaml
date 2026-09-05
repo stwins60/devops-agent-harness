@@ -1,0 +1,40 @@
+name: cicd-pipeline-failure
+description: A CI/CD pipeline run failed; find the failing job/step and its root cause.
+trigger:
+  - pipeline failed
+  - ci failed
+  - workflow failed
+  - build failed
+  - job failed
+  - github actions
+  - gitlab ci
+severity: medium
+tags: [cicd, github-actions, gitlab-ci]
+prechecks:
+  - description: List recent runs and pick the failed one (or the one named in the request)
+    tool: cicd_list_runs
+diagnosis:
+  - description: List jobs and identify the failed step
+    tool: cicd_run_jobs
+    args: { run_id: $run_id }
+  - description: Read the failed job log and extract the error signature
+    tool: cicd_job_logs
+    args: { job_id: $job_id }
+  - description: Determine whether the failure is code (lint/tests), environment (runner, dependency, credentials) or flakiness (retry succeeds)
+commands:
+  - gh run list --limit 10
+  - gh run view <id> --log-failed
+expected_results:
+  - A concrete error line (lint rule, failing test, missing dependency, auth failure) explains the exit code
+remediation:
+  - description: Fix the code/config on a branch, run the same lint/tests locally, push and let CI validate
+  - description: Re-run failed jobs only when the failure was transient
+    tool: github_rerun_workflow
+    args: { run_id: $run_id }
+    approval_required: true
+validation:
+  - description: The re-run or the new commit's run concludes success
+    tool: cicd_list_runs
+rollback:
+  - description: Revert the fix commit
+approval_required: false

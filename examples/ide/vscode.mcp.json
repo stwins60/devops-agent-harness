@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "devops-agent": {
+      "type": "stdio",
+      "command": "devops-agent",
+      "args": ["--project-root", "${workspaceFolder}", "--mode", "approval", "mcp-serve"]
+    }
+  }
+}

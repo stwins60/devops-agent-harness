@@ -1,0 +1,84 @@
+# Default harness policy. Enforced by agent/policies/engine.py OUTSIDE the LLM.
+#
+# A project may add ".agent/policy.yaml" to make this policy STRICTER
+# (more approvals, more protected branches, more forbidden tools). A project
+# policy can never relax anything defined here.
+version: 1
+
+environments:
+  local:
+    # highest permission level the agent may exercise without asking
+    auto_allow_max_permission: DEPLOY
+    require_approval:
+      - terraform_destroy
+      - kubectl_delete
+      - docker_system_prune
+    explicit_confirmation: false
+  dev:
+    auto_allow_max_permission: MODIFY
+    require_approval:
+      - terraform_apply
+      - terraform_destroy
+      - kubectl_delete
+      - kubectl_rollout_restart
+      - helm_upgrade
+      - aws_modify
+      - database_migration
+    explicit_confirmation: false
+  qa:
+    auto_allow_max_permission: ANALYZE
+    require_approval:
+      - kubectl_apply
+      - kubectl_delete
+      - kubectl_rollout_restart
+      - terraform_apply
+      - terraform_destroy
+      - helm_upgrade
+      - aws_modify
+      - database_migration
+    explicit_confirmation: false
+  staging:
+    auto_allow_max_permission: ANALYZE
+    require_approval:
+      - "*"
+    explicit_confirmation: false
+  production:
+    auto_allow_max_permission: READ
+    require_approval:
+      - "*"
+    explicit_confirmation: true
+  unknown:
+    # An environment that cannot be verified from trusted configuration is
+    # treated exactly like production.
+    auto_allow_max_permission: READ
+    require_approval:
+      - "*"
+    explicit_confirmation: true
+
+# Direct pushes to these branches are refused even with approval.
+protected_branches:
+  - main
+  - master
+  - production
+  - "release/*"
+
+# Behaviours that are never permitted.
+forbidden:
+  - secret_output
+  - credential_logging
+  - privilege_escalation
+
+# Tools that are disabled entirely (names or glob patterns).
+forbidden_tools: []
+
+# Per-tool overrides. Only stricter settings are honoured.
+tool_overrides: {}
+
+# Extra command classification rules (pattern/class/permission/reason).
+commands: []
+
+# Global safety limits.
+limits:
+  max_tool_calls: 200
+  max_iterations: 60
+  max_repeated_calls: 3

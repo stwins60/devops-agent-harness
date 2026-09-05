@@ -1,0 +1,4 @@
+# ~/.codex/config.toml
+[mcp_servers.devops-agent]
+command = "devops-agent"
+args = ["--project-root", ".", "--mode", "approval", "mcp-serve"]

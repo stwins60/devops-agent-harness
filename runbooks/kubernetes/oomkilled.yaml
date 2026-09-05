@@ -1,0 +1,34 @@
+name: kubernetes-oomkilled
+description: Container repeatedly terminated with exit code 137 / OOMKilled.
+trigger:
+  - oomkilled
+  - exit code 137
+  - out of memory
+  - memory limit
+severity: high
+tags: [kubernetes, memory, resources]
+prechecks:
+  - description: Confirm the termination reason is OOMKilled (not a liveness kill)
+    tool: kubectl_get
+    args: { kind: pods, namespace: $namespace }
+diagnosis:
+  - description: Compare container memory limit with working-set usage over time
+    tool: kubectl_top_pods
+    args: { namespace: $namespace }
+  - description: Check whether usage grows steadily (leak) or spikes on specific requests (batch/cache load)
+  - description: Check node memory pressure events
+    tool: kubectl_events
+    args: { namespace: $namespace }
+commands:
+  - kubectl describe pod <pod> -n <ns>
+  - kubectl top pods -n <ns>
+expected_results:
+  - lastState.terminated.reason == OOMKilled and usage approaches the limit before each restart
+remediation:
+  - description: Raise the memory limit to observed peak + headroom OR fix the memory growth in the application; redeploy through the normal PR flow
+    approval_required: true
+validation:
+  - description: No further OOMKilled restarts; working set stays below 80 % of the limit
+rollback:
+  - description: Restore the previous resource limits from git
+approval_required: true

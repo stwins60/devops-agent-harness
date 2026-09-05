@@ -1,0 +1,54 @@
+# Copy to .agent/config.yaml in the repository you want the agent to operate on.
+# NEVER put secrets here: tokens come from environment variables (GITHUB_TOKEN, JIRA_API_TOKEN, ...).
+mode: approval            # read-only | plan | approval | autonomous
+environment: dev          # declared environment (can only be made stricter by bindings/hints)
+provider: auto            # auto | mock | none | openai | anthropic | claude-code | opencode | copilot | ollama
+provider_model: null
+
+jira_url: https://your-company.atlassian.net
+jira_project: DEVOPS
+github_repo: example-org/sample-app
+git_provider: github      # github | gitlab
+default_namespace: production
+default_repo_path: .      # repository the Jira workflow operates on when the ticket does not name one
+kube_context: null
+aws_profile: null
+aws_region: eu-west-1
+prometheus_url: http://prometheus.monitoring:9090
+loki_url: http://loki.monitoring:3100
+
+# Trusted environment identity bindings. The policy for an operation is chosen
+# from the environment these bindings resolve, never from text in a prompt.
+environments:
+  production:
+    kube_contexts: [prod-eks, arn:aws:eks:eu-west-1:123456789012:cluster/prod]
+    aws_accounts: ["123456789012"]
+    namespaces: [production]
+    branches: [main, production]
+  staging:
+    kube_contexts: [staging-eks]
+    aws_accounts: ["210987654321"]
+    namespaces: [staging]
+  dev:
+    kube_contexts: [kind-dev, minikube, docker-desktop]
+    namespaces: [dev, default]
+
+limits:
+  max_tool_calls: 200
+  max_iterations: 60
+  max_repeated_calls: 3
+  max_context_chars: 12000
+
+# Optional MCP servers whose tools are registered with configured risk metadata.
+mcp_servers: []
+#  - name: jira
+#    command: ["npx", "-y", "@example/mcp-jira"]
+#    env: { JIRA_TOKEN: "${JIRA_API_TOKEN}" }
+#    category: jira
+#    default_permission: MODIFY
+#    read_only_prefixes: [get, list, search]
+#    tools:
+#      delete_issue: { disabled: true }
+
+# Pricing data for cost estimates (optional; without it the agent only flags cost impact qualitatively).
+pricing: {}
