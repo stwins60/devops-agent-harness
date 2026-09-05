@@ -351,6 +351,8 @@ Details: [docs/security.md](docs/security.md) · [docs/approvals.md](docs/approv
 
 ## 🏗️ Architecture
 
+![DevOps Agent Harness architecture: the model proposes, the harness disposes](docs/images/architecture.webp)
+
 ```text
                     ┌──────────────────────────┐
                     │   USER · IDE · MCP CLIENT │
