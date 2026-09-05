@@ -1,112 +1,146 @@
+<div align="center">
+
 # DevOps Agent Harness
 
-A production-grade, **model-agnostic** harness that turns an AI coding agent (Claude Code,
-OpenCode, GitHub Copilot, Cursor, Windsurf, Codex CLI, Gemini CLI, or any OpenAI/Anthropic
-compatible model) into a governed DevOps engineer. Policy, approvals, audit logging, secret
-redaction and rollback are enforced **outside the model**, so the agent can troubleshoot
-Kubernetes, Docker, Linux, AWS, Terraform, Ansible, CI/CD and Git, work Jira tickets end to end,
-run incident response and produce evidence-backed reports without ever being trusted with
-unchecked write access.
+**A production-grade, model-agnostic harness that turns any AI coding agent into a governed DevOps engineer.**
 
-```text
-USER REQUEST -> TASK UNDERSTANDING -> CONTEXT DISCOVERY -> INSPECTION -> ROOT CAUSE ANALYSIS
--> PLAN -> RISK ASSESSMENT -> APPROVAL GATE -> IMPLEMENTATION -> VALIDATION -> DOCUMENTATION
--> JIRA / PR UPDATE -> FINAL REPORT
-```
+Policy, approvals, audit logging, secret redaction and rollback are enforced **outside the model**.
 
 [![CI](https://github.com/stwins60/devops-agent-harness/actions/workflows/ci.yml/badge.svg)](https://github.com/stwins60/devops-agent-harness/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](pyproject.toml)
+[![License](https://img.shields.io/badge/license-Apache%202.0-green)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-176%20passing-brightgreen)](tests)
+[![MCP](https://img.shields.io/badge/MCP-server%20%2B%20client-purple)](docs/integrations.md)
+
+[Quick start](#-quick-start) ·
+[Production install](#-installation-for-production) ·
+[IDE integrations](#-using-it-from-your-ide-or-coding-agent) ·
+[Safety model](#-safety-model) ·
+[Architecture](#-architecture) ·
+[Docs](#-documentation)
+
+</div>
 
 ---
 
-## Table of contents
+## Overview
 
-1. [What it does](#what-it-does)
-2. [Quick start (5 minutes, no credentials)](#quick-start)
-3. [Installation for production](#installation-for-production)
-4. [Configuration](#configuration)
-5. [Using it from your IDE / coding agent](#using-it-from-your-ide--coding-agent)
-   - [Claude Code](#claude-code) - [OpenCode](#opencode) - [Cursor](#cursor) - [VS Code + Copilot](#vs-code--github-copilot)
-   - [Windsurf](#windsurf) - [JetBrains](#jetbrains-ides) - [Codex CLI / Gemini CLI](#codex-cli-and-gemini-cli) - [Any other MCP client](#any-other-mcp-client)
-6. [Using it as a model-driven CLI](#using-it-as-a-model-driven-cli)
-7. [Safety model](#safety-model)
-8. [Architecture](#architecture)
-9. [Operations: audit, metrics, task state, resume](#operations)
-10. [Documentation](#documentation)
+The harness lets Claude Code, OpenCode, GitHub Copilot, Cursor, Windsurf, Codex CLI, Gemini CLI, or any OpenAI/Anthropic-compatible model operate as a semi-autonomous DevOps engineer: troubleshooting Kubernetes, Docker, Linux, AWS, Terraform, Ansible, CI/CD and Git, working Jira tickets end to end, running incident response and producing evidence-backed reports.
 
----
+It behaves like an **engineering platform**, not a chatbot. Every task follows a fixed lifecycle, every tool call passes through a policy engine, and the agent stops whenever an operation is unsafe, ambiguous, unavailable or requires human approval.
 
-## What it does
+```text
+USER REQUEST → TASK UNDERSTANDING → CONTEXT DISCOVERY → INSPECTION → ROOT CAUSE ANALYSIS
+             → PLAN → RISK ASSESSMENT → APPROVAL GATE → IMPLEMENTATION → VALIDATION
+             → DOCUMENTATION → JIRA / PR UPDATE → FINAL REPORT
+```
+
+### Key capabilities
+
+| | Capability | Details |
+|---|---|---|
+| 🔍 | **Evidence-backed diagnosis** | Every conclusion is built from `FACT` → `HYPOTHESIS` → `INFERENCE` → `RECOMMENDATION`, each fact tagged with the tool that produced it. No root cause without evidence. |
+| 🎫 | **Jira ticket to pull request** | Read the ticket, stage the repo, diagnose, plan, get approval, fix, run tests and security scans, branch, commit, push, open the PR, update Jira. |
+| 🚨 | **Incident response** | Triage, severity, metrics/logs/deployment correlation, approved mitigation (rollback), verification and a postmortem with timeline, impact and actions. |
+| 📋 | **Change planning** | Complete plans (files, infrastructure, risks, rollback, validation, permissions, cost notes) from runbooks plus live evidence, with zero mutation. |
+| 🛡️ | **Policy outside the model** | Permission levels, command classification, environment identity, protected branches and approval rules that the LLM cannot override. |
+| 🔌 | **Model-agnostic** | Rule-based specialists work with **no model at all**. Adapters for OpenAI-compatible, Anthropic, Claude Code, OpenCode and Copilot; MCP server for every IDE. |
+| 🧪 | **Fully testable offline** | `--mock` swaps all 15 backends for deterministic fakes with 8 scenarios and 11 failure flags. 176 tests, no credentials. |
+
+### Commands
 
 | Command | Behaviour |
 |---|---|
-| `devops-agent "why is my pod crashing?"` | read-only investigation; evidence-backed root cause (FACT / HYPOTHESIS / INFERENCE / RECOMMENDATION) |
-| `devops-agent jira DEVOPS-382` | read ticket -> locate repo -> diagnose -> plan -> approval -> fix -> tests + security scans -> branch -> commit -> push -> PR -> Jira comment + transition -> report |
-| `devops-agent incident "production API is returning 503"` | triage, severity, metrics/logs/deployment correlation, mitigation (rollback) with approval, postmortem |
-| `devops-agent plan "upgrade our Kubernetes worker nodes"` | complete change plan from runbooks + live evidence; mutates nothing |
-| `devops-agent execute TASK-ID` / `resume TASK-ID` | continue a paused task; only policy-permitted, approved actions run |
-| `devops-agent diagnose kubernetes deployment/api -n production` | targeted diagnosis |
-| `devops-agent fix DEVOPS-382 --dry-run` | full plan and diffs, nothing executed |
-| `devops-agent mcp-serve` | expose all 115 governed tools to any MCP client (Claude Code, OpenCode, Cursor, ...) |
+| `devops-agent "why is my pod crashing?"` | Read-only investigation with an evidence-backed root cause |
+| `devops-agent jira DEVOPS-382` | Full ticket workflow through to PR and Jira update |
+| `devops-agent incident "production API is returning 503"` | Structured incident investigation, mitigation and postmortem |
+| `devops-agent plan "upgrade our Kubernetes worker nodes"` | Complete change plan, nothing modified |
+| `devops-agent diagnose kubernetes deployment/api -n production` | Targeted diagnosis |
+| `devops-agent fix DEVOPS-382 --dry-run` | Plan and diffs without executing anything |
+| `devops-agent execute TASK-ID` / `resume TASK-ID` | Continue a paused task; only approved, policy-permitted actions run |
+| `devops-agent mcp-serve` | Expose all 115 governed tools to any MCP client |
 
-Specialist agents: kubernetes, docker, linux, jira, git/PR, cicd, aws, terraform, ansible,
-networking, observability, security, incident response, documentation.
+**Specialist agents:** Kubernetes · Docker · Linux · Jira · Git/PR · CI/CD · AWS · Terraform · Ansible · Networking · Observability · Security · Incident Response · Documentation
 
 ---
 
-## Quick start
+## 🚀 Quick start
+
+Five minutes, no credentials, no infrastructure.
 
 ```bash
 git clone https://github.com/stwins60/devops-agent-harness.git
 cd devops-agent-harness
-python -m venv .venv && . .venv/bin/activate         # Windows: .venv\Scripts\activate
+python -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
+```
 
-# everything below runs against deterministic mock infrastructure, no credentials needed
+```bash
 devops-agent --mock "Why is my Kubernetes API deployment failing?"
 devops-agent --mock --yes jira DEVOPS-382
 devops-agent --mock --approve-all incident "production API is returning 503"
 devops-agent --mock plan "upgrade our Kubernetes worker nodes"
 devops-agent --mock fix DEVOPS-382 --dry-run
-make test                                             # 175 tests
+make test
 ```
 
-Mock scenarios: `--scenario probe-port-mismatch|oom|image-pull|pending|config-error|healthy|ci-failure|disk-full`.
-Failure injection: `--flag jira_unavailable|k8s_unreachable|aws_creds_expired|git_push_rejected|pr_create_fails|terraform_plan_fails|tool_timeout|rollback_fails|partial_deploy|permission_denied`.
+<details>
+<summary><b>What you will see</b> (abridged output of the first command)</summary>
+
+```text
+FACT: Deployment production/api: 0/3 replicas ready, image registry.example.com/sample-app/api:1.4.2, revision 7.
+FACT: Pod api-7c98d9b55c-abc12: phase Running, ready=False, restarts=12, waiting reason CrashLoopBackOff, last exit code 137 (Error).
+FACT: Event Unhealthy (41x): Readiness probe failed: dial tcp 10.0.1.21:8000: connect: connection refused
+FACT: Application log shows it listens on port 8080.
+FACT: Container api: containerPorts=[8080], probes=readinessProbe->8000/healthz, livenessProbe->8000/healthz.
+
+HYPOTHESIS (confirmed, confidence 95%):
+Probe port mismatch: readinessProbe checks port 8000 but the container listens on 8080; kubelet kills/never readies the pod.
+
+HYPOTHESIS (rejected, confidence 40%):
+Container was killed with exit 137 (SIGKILL); possible OOM kill (limit 512Mi, usage 48Mi) or liveness-probe kill.
+
+CONCLUSION: Confirmed - Probe port mismatch ... (confidence 95%)
+RECOMMENDATION: Set readinessProbe port to 8080 in the deployment manifest.
+```
+
+</details>
+
+**Mock scenarios:** `--scenario probe-port-mismatch | oom | image-pull | pending | config-error | healthy | ci-failure | disk-full`
+
+**Failure injection:** `--flag jira_unavailable | k8s_unreachable | aws_creds_expired | git_push_rejected | pr_create_fails | terraform_plan_fails | tool_timeout | rollback_fails | partial_deploy | permission_denied`
 
 ---
 
-## Installation for production
+## 📦 Installation for production
 
-Requirements: Python 3.10+, `git`. Optional CLIs used when present: `kubectl`, `docker`,
-`aws`, `terraform`, `ansible-playbook`, `trivy`, `semgrep`, `gitleaks`, `checkov`.
+**Requirements:** Python 3.10+, `git`. Optional CLIs used when present: `kubectl`, `docker`, `aws`, `terraform`, `ansible-playbook`, `trivy`, `semgrep`, `gitleaks`, `checkov`. Missing tools degrade gracefully.
 
 ```bash
-# 1. install (a dedicated venv or pipx)
+# 1. Install into an isolated environment
 pipx install "git+https://github.com/stwins60/devops-agent-harness.git"
-# or: pip install "git+https://github.com/stwins60/devops-agent-harness.git"
 
-# 2. initialise the repository the agent should operate on
+# 2. Initialise the repository the agent should operate on
 cd /path/to/your/service-repo
-devops-agent init            # creates .agent/config.yaml, .agent/{memory,decisions,runbooks,...}, AGENTS.md skeleton
+devops-agent init        # creates .agent/config.yaml, .agent/{memory,decisions,runbooks,...} and an AGENTS.md skeleton
 
-# 3. provide credentials through the environment ONLY (never in config files)
+# 3. Provide credentials through the environment only (never in config files)
 export JIRA_URL=https://your-company.atlassian.net JIRA_EMAIL=you@company.com JIRA_API_TOKEN=...
-export GITHUB_TOKEN=...            # or GITLAB_TOKEN + GITLAB_URL
-export KUBECONFIG=~/.kube/config   # kube contexts are bound to environments in .agent/config.yaml
-export AWS_PROFILE=readonly        # the standard AWS credential chain
+export GITHUB_TOKEN=...              # or GITLAB_TOKEN + GITLAB_URL
+export KUBECONFIG=~/.kube/config     # contexts are bound to environments in .agent/config.yaml
+export AWS_PROFILE=readonly          # standard AWS credential chain
 
-# 4. first run in read-only mode to confirm environment resolution
+# 4. First run in read-only mode to confirm environment resolution
 devops-agent --mode read-only "why is deployment api failing in production?"
 ```
 
-Docker: `docker compose up -d` starts the harness with a mock Jira/GitHub API server; see
-`docs/development.md`. A production checklist is in `docs/production.md`.
+A complete go-live checklist (read-only identities, environment bindings, hardening, upgrades) is in [docs/production.md](docs/production.md). Docker-based local development is described in [docs/development.md](docs/development.md).
 
 ---
 
-## Configuration
+## ⚙️ Configuration
 
-`.agent/config.yaml` in the target repository (see `examples/config.example.yaml`):
+`.agent/config.yaml` lives in the target repository. Full reference: [examples/config.example.yaml](examples/config.example.yaml).
 
 ```yaml
 mode: approval                 # read-only | plan | approval | autonomous
@@ -117,77 +151,77 @@ github_repo: your-org/service-repo
 git_provider: github           # or gitlab (+ gitlab_project)
 default_namespace: production
 prometheus_url: http://prometheus.monitoring:9090
-environments:                  # trusted identity -> environment; unknown == production
+
+environments:                  # trusted identity -> environment; anything unbound == production
   production: { kube_contexts: [prod-eks], aws_accounts: ["123456789012"], namespaces: [production] }
   staging:    { kube_contexts: [staging-eks], namespaces: [staging] }
   dev:        { kube_contexts: [kind-dev, docker-desktop], namespaces: [dev, default] }
-mcp_servers: []                # optional: consume other MCP servers as governed tools
+
+mcp_preapproved: [git_create_branch, git_add, git_commit, jira_add_comment]   # low-risk writes allowed over MCP
+mcp_servers: []                # consume other MCP servers as governed tools
 ```
 
-Optional `.agent/policy.yaml` makes the built-in policy **stricter** (never looser): extra
-protected branches, forbidden tools, per-tool approval overrides, tighter environment limits.
-See `examples/policy.example.yaml` and `docs/security.md`.
+| File | Purpose |
+|---|---|
+| `.agent/config.yaml` | Integrations, environment bindings, limits, providers. No secrets. |
+| `.agent/policy.yaml` | Optional. Makes the built-in policy **stricter** (never looser). See [examples/policy.example.yaml](examples/policy.example.yaml). |
+| `AGENTS.md` | Project architecture, conventions and rules. Discovered hierarchically and read natively by Claude Code, OpenCode, Codex and Copilot. |
+| `.agent/runbooks/` | Project runbooks, consulted before the agent improvises. |
 
-Environment variables override config: `DEVOPS_AGENT_MODE`, `DEVOPS_AGENT_ENV`,
-`DEVOPS_AGENT_PROVIDER`, `DEVOPS_AGENT_NAMESPACE`, `DEVOPS_AGENT_GITHUB_REPO`, `DEVOPS_AGENT_TASKS_DIR`,
-`DEVOPS_AGENT_NON_INTERACTIVE`, `DEVOPS_AGENT_MOCK`.
+Environment variable overrides: `DEVOPS_AGENT_MODE`, `DEVOPS_AGENT_ENV`, `DEVOPS_AGENT_PROVIDER`, `DEVOPS_AGENT_NAMESPACE`, `DEVOPS_AGENT_GITHUB_REPO`, `DEVOPS_AGENT_TASKS_DIR`, `DEVOPS_AGENT_NON_INTERACTIVE`, `DEVOPS_AGENT_MOCK`.
 
 ---
 
-## Using it from your IDE / coding agent
+## 🧩 Using it from your IDE or coding agent
 
-There are two integration directions. You can use both.
+There are two integration directions and you can use both.
 
-| Direction | How | When |
+| Direction | How | Best for |
 |---|---|---|
-| **Your agent uses the harness** (recommended) | run `devops-agent mcp-serve` as an MCP server; the agent gets 115 governed tools (`kubectl_*`, `jira_*`, `git_*`, `aws_*`, `terraform_*`, ...) and every call is policy-checked, audited and redacted | day-to-day work inside Claude Code / OpenCode / Cursor / VS Code / Windsurf |
-| **The harness uses your agent as its model** | `devops-agent --provider claude-code|opencode|copilot|openai|anthropic|ollama ...` | scripted / CI runs of the full lifecycle (Jira ticket -> PR) where the harness owns the workflow |
+| **Your agent uses the harness** *(recommended)* | Run `devops-agent mcp-serve` as an MCP server. The agent gets 115 governed tools; every call is policy-checked, audited and redacted. | Day-to-day work inside Claude Code, OpenCode, Cursor, VS Code, Windsurf, JetBrains |
+| **The harness uses your agent as its model** | `devops-agent --provider claude-code \| opencode \| copilot \| openai \| anthropic \| ollama …` | Scripted or CI runs of the full lifecycle where the harness owns the workflow |
 
-The MCP server command is the same everywhere:
+The MCP server command is identical for every client:
 
 ```text
 devops-agent --project-root /path/to/repo --mode approval mcp-serve
 ```
 
-* `--project-root` is the repository containing `.agent/config.yaml` (environment bindings, Jira/GitHub settings).
-* `--mode read-only` for investigation-only sessions; `--mode approval` (default) lets the model
-  investigate freely while every mutation still needs approval; `--mode autonomous` auto-allows
-  low-risk mutations per environment policy (production always needs a human).
-* Add `--mock` to try any IDE integration without infrastructure.
+| Flag | Effect |
+|---|---|
+| `--project-root` | Repository containing `.agent/config.yaml` and `AGENTS.md` |
+| `--mode read-only` | Investigation only; mutating tools are refused |
+| `--mode approval` | Default. Investigate freely; mutations need approval (pre-approve a few via `mcp_preapproved`) |
+| `--mode autonomous` | Low-risk mutations run per environment policy; production always needs a human |
+| `--mock` | Try any IDE integration with no infrastructure |
 
-In MCP mode approvals are **non-interactive by default**, so a mutation that needs approval is
-refused with an explanatory error and the task is left resumable. Approve it from a terminal with
-`devops-agent execute TASK-ID` (interactive prompt) or run the harness CLI directly for that step.
-Copy-paste-ready config files for every client are in `examples/ide/`.
+> Over MCP there is no terminal, so an operation that needs approval is refused with an explanatory error and the task stays resumable. Approve it from a terminal with `devops-agent execute TASK-ID`.
 
-### Claude Code
+Ready-to-use configuration files for every client are in [`examples/ide/`](examples/ide). Full details, prompts and troubleshooting: [docs/integrations.md](docs/integrations.md).
+
+<details open>
+<summary><b>Claude Code</b></summary>
 
 ```bash
-# project scope (writes .mcp.json, shareable with the team)
 claude mcp add devops-agent --scope project -- devops-agent --project-root . --mode approval mcp-serve
-# or user scope
-claude mcp add devops-agent -- devops-agent --project-root /path/to/repo --mode approval mcp-serve
 ```
 
-`.mcp.json` equivalent (`examples/ide/claude-code.mcp.json`):
+Equivalent `.mcp.json` ([example](examples/ide/claude-code.mcp.json)):
 
 ```json
 { "mcpServers": { "devops-agent": { "command": "devops-agent",
     "args": ["--project-root", ".", "--mode", "approval", "mcp-serve"] } } }
 ```
 
-Claude Code reads `AGENTS.md`/`CLAUDE.md`; symlink or copy the generated `AGENTS.md` to
-`CLAUDE.md` so the conventions and approval rules are in its context. In Claude Code, run
-`/mcp` to confirm `devops-agent` is connected, then ask in plain language:
-`Use devops-agent to find out why deployment api in production is failing.`
+Copy or symlink `AGENTS.md` to `CLAUDE.md`, run `/mcp` to confirm the connection, then ask for example: *"Use devops-agent to find out why deployment api in production is failing."*
+Reverse direction: `devops-agent --provider claude-code jira DEVOPS-382`.
 
-To let the harness drive Claude Code instead: `devops-agent --provider claude-code jira DEVOPS-382`
-(requires the `claude` CLI on PATH).
+</details>
 
-### OpenCode
+<details open>
+<summary><b>OpenCode</b></summary>
 
-Add to `~/.config/opencode/opencode.json` (global) or `opencode.json` in the project
-(`examples/ide/opencode.json`):
+Add to `~/.config/opencode/opencode.json` or a project `opencode.json` ([full example with a read-only agent](examples/ide/opencode.json)):
 
 ```json
 {
@@ -205,66 +239,56 @@ Add to `~/.config/opencode/opencode.json` (global) or `opencode.json` in the pro
       "mode": "primary",
       "prompt": "{file:/path/to/repo/AGENTS.md}",
       "tools": { "devops-agent*": true, "atlassian*": false, "github*": false, "gitlab*": false }
-    },
-    "devops-readonly": {
-      "description": "Read-only investigation, never mutates",
-      "mode": "primary",
-      "prompt": "{file:/path/to/repo/AGENTS.md}\n\nREAD-ONLY: inspect only, never change anything.",
-      "tools": { "devops-agent*": true, "devops-agent_kubectl_apply": false, "devops-agent_kubectl_delete": false,
-                 "devops-agent_git_push": false, "devops-agent_github_create_pr": false, "devops-agent_terraform_apply": false,
-                 "devops-agent_aws_modify": false, "devops-agent_fs_write": false, "devops-agent_fs_replace": false,
-                 "devops-agent_shell_run": false }
     }
   }
 }
 ```
 
-Then `opencode mcp list` should show `devops-agent connected`; press `tab` in the TUI and pick
-the `devops` agent. Disabling the raw `atlassian*`/`github*` MCPs for that agent prevents the model
-from bypassing the harness's policy by talking to Jira/GitHub directly. Tool names inside OpenCode
-are `devops-agent_<tool>`. Windows: use the full path to `.venv\Scripts\devops-agent.exe` in `command`.
+`opencode mcp list` should report `devops-agent connected`. Press `tab` in the TUI and choose the `devops` agent. Disabling the raw Jira/GitHub MCPs for that agent prevents the model from bypassing the harness policy. Tool names appear as `devops-agent_<tool>`. On Windows use the full path to `.venv\Scripts\devops-agent.exe`.
+Reverse direction: `devops-agent --provider opencode "why is my pod crashing?"`.
 
-Reverse direction: `devops-agent --provider opencode "why is my pod crashing?"` (uses `opencode run`).
+</details>
 
-### Cursor
+<details>
+<summary><b>Cursor</b></summary>
 
-`.cursor/mcp.json` in the project or `~/.cursor/mcp.json` (`examples/ide/cursor.mcp.json`):
+`.cursor/mcp.json` or `~/.cursor/mcp.json` ([example](examples/ide/cursor.mcp.json)), enabled under *Settings → MCP*. Add `AGENTS.md` as a rule in `.cursor/rules`.
 
-```json
-{ "mcpServers": { "devops-agent": { "command": "devops-agent",
-    "args": ["--project-root", ".", "--mode", "approval", "mcp-serve"] } } }
-```
+</details>
 
-Enable it under *Settings -> MCP*. Add `AGENTS.md` to *Rules* (or reference it from `.cursor/rules`)
-so the agent follows the conventions.
+<details>
+<summary><b>VS Code + GitHub Copilot</b></summary>
 
-### VS Code + GitHub Copilot
-
-`.vscode/mcp.json` (`examples/ide/vscode.mcp.json`):
+`.vscode/mcp.json` ([example](examples/ide/vscode.mcp.json)):
 
 ```json
 { "servers": { "devops-agent": { "type": "stdio", "command": "devops-agent",
     "args": ["--project-root", "${workspaceFolder}", "--mode", "approval", "mcp-serve"] } } }
 ```
 
-Open Copilot Chat in *Agent* mode, click the tools icon and enable `devops-agent`. Copilot reads
-`.github/copilot-instructions.md`; point it at `AGENTS.md` or copy the relevant sections.
-Reverse direction: `devops-agent --provider copilot ...` (uses the Copilot CLI).
+Open Copilot Chat in *Agent* mode and enable `devops-agent` in the tools picker. Reference `AGENTS.md` from `.github/copilot-instructions.md`.
+Reverse direction: `devops-agent --provider copilot …`.
 
-### Windsurf
+</details>
 
-`~/.codeium/windsurf/mcp_config.json` (`examples/ide/windsurf.mcp.json`) uses the same
-`mcpServers` shape as Cursor. Enable the server under *Cascade -> MCP*.
+<details>
+<summary><b>Windsurf</b></summary>
 
-### JetBrains IDEs
+`~/.codeium/windsurf/mcp_config.json` ([example](examples/ide/windsurf.mcp.json)), enabled under *Cascade → MCP servers*. Add `AGENTS.md` to `.windsurfrules`.
 
-*Settings -> Tools -> AI Assistant -> Model Context Protocol -> Add*, command `devops-agent`,
-arguments `--project-root <repo> --mode approval mcp-serve`. Junie and the AI Assistant chat then
-see the tools.
+</details>
 
-### Codex CLI and Gemini CLI
+<details>
+<summary><b>JetBrains IDEs</b></summary>
 
-Codex (`~/.codex/config.toml`, `examples/ide/codex.config.toml`):
+*Settings → Tools → AI Assistant → Model Context Protocol → Add*: command `devops-agent`, arguments `--project-root <repo> --mode approval mcp-serve`. Junie and the AI chat then list the tools.
+
+</details>
+
+<details>
+<summary><b>Codex CLI and Gemini CLI</b></summary>
+
+Codex `~/.codex/config.toml` ([example](examples/ide/codex.config.toml)):
 
 ```toml
 [mcp_servers.devops-agent]
@@ -272,109 +296,147 @@ command = "devops-agent"
 args = ["--project-root", ".", "--mode", "approval", "mcp-serve"]
 ```
 
-Gemini CLI (`~/.gemini/settings.json`, `examples/ide/gemini.settings.json`):
+Gemini `~/.gemini/settings.json` ([example](examples/ide/gemini.settings.json)) uses the standard `mcpServers` shape. Codex reads `AGENTS.md` natively; copy it to `GEMINI.md` for Gemini.
 
-```json
-{ "mcpServers": { "devops-agent": { "command": "devops-agent",
-    "args": ["--project-root", ".", "--mode", "approval", "mcp-serve"] } } }
-```
+</details>
 
-### Any other MCP client
+<details>
+<summary><b>Any other MCP client</b></summary>
 
-The server speaks MCP over stdio (`initialize`, `tools/list`, `tools/call`). Any client that can
-launch a local command works. Verify manually:
+The server speaks MCP over stdio (`initialize`, `tools/list`, `tools/call`). Verify it outside any IDE:
 
 ```bash
 printf '%s\n%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | devops-agent --mock mcp-serve
 ```
 
-Full per-client details, troubleshooting and prompt suggestions: `docs/integrations.md`.
+</details>
 
 ---
 
-## Using it as a model-driven CLI
+## 🤖 Using it as a model-driven CLI
 
-The rule-based specialists produce diagnoses **without any model**. A model is consulted only
-when they cannot conclude, and its tool requests still pass through policy and approval.
+The rule-based specialists diagnose **without any model**. A model is consulted only when they cannot conclude, and its tool requests still pass through policy and approval.
 
 ```bash
-devops-agent --provider anthropic  jira DEVOPS-382         # ANTHROPIC_API_KEY
-devops-agent --provider openai     incident "..."          # OPENAI_API_KEY (+ OPENAI_BASE_URL for Azure/vLLM)
-devops-agent --provider ollama     "why is my pod crashing?"  # local OpenAI-compatible server
-devops-agent --provider claude-code plan "..."            # claude CLI
-devops-agent --provider opencode   "..."                    # opencode CLI
-devops-agent --provider copilot    "..."                    # copilot CLI
+devops-agent --provider anthropic   jira DEVOPS-382                 # ANTHROPIC_API_KEY
+devops-agent --provider openai      incident "…"                    # OPENAI_API_KEY (+ OPENAI_BASE_URL for Azure / vLLM)
+devops-agent --provider ollama      "why is my pod crashing?"       # local OpenAI-compatible server
+devops-agent --provider claude-code plan "…"                        # claude CLI
+devops-agent --provider opencode    "…"                             # opencode CLI
+devops-agent --provider copilot     "…"                             # copilot CLI
 ```
 
-Interactive approvals show the operation, environment, risk, expected impact, rollback, and
-accept `y / n / s(kip) / d(iff) / p(lan) / r(ollback)`. DESTROY-class and production operations
-require typing `approve <tool>`. `--yes` auto-approves non-explicit prompts; `--approve-all` is for
-demos only. CI usage: `--non-interactive` (denies and pauses; resume from a terminal).
+Interactive approvals show the operation, environment, risk, expected impact and rollback, and accept `y` / `n` / `s`kip / `d`iff / `p`lan / `r`ollback. DESTROY-class and production operations require typing `approve <tool>`. `--yes` auto-approves non-explicit prompts, `--approve-all` is for demos only, and `--non-interactive` (CI) denies and pauses so the task can be resumed from a terminal.
 
 ---
 
-## Safety model
+## 🛡️ Safety model
 
-* **Permission levels** READ < ANALYZE < MODIFY < DEPLOY < DESTROY on every tool.
-* **Command classification** SAFE / CAUTION / DANGEROUS / FORBIDDEN for shell commands
-  (`rm -rf /`, `curl | sh`, credential dumps are refused outright; `terraform destroy`,
-  `kubectl delete`, IAM changes, DB migrations, force pushes always need explicit approval).
-* **Environment identity** from trusted bindings (kube context, AWS account, namespace, host);
-  request/ticket text can only make it stricter; unknown == production.
-* **Policy** (`policies/default.yaml`) per environment; project policy can only tighten it.
-* **Protected branches** (`main`, `master`, `production`, `release/*`) are never pushed to.
-* **Secrets** redacted from every log, artifact, comment and memory write; child processes get a sanitised environment.
-* **Audit log** `.agent/audit/audit.jsonl` (tool calls, approvals, stages, rollbacks, model usage, metrics).
-* **Rollback plan** recorded for every mutation; validation failures roll back automatically; impossible rollbacks are stated.
-* **Loop guards**: tool-call budget, repeated-call detection, model iteration limit.
+| Control | What it guarantees |
+|---|---|
+| **Permission levels** | `READ < ANALYZE < MODIFY < DEPLOY < DESTROY` declared on every tool |
+| **Command classification** | Shell commands are `SAFE / CAUTION / DANGEROUS / FORBIDDEN`. `rm -rf /`, `curl \| sh` and credential dumps are refused outright; `terraform destroy`, `kubectl delete`, IAM changes, DB migrations and force pushes always need explicit approval |
+| **Environment identity** | Resolved from trusted bindings (kube context, AWS account, namespace, host). Request or ticket text can only make it stricter. Unknown equals production |
+| **Policy** | `policies/default.yaml` per environment; project policy can only tighten it |
+| **Protected branches** | `main`, `master`, `production`, `release/*` are never pushed to; changes go through feature branches and PRs |
+| **Secrets** | Redacted from every log, artifact, comment and memory write; child processes receive a sanitised environment |
+| **Audit log** | `.agent/audit/audit.jsonl` records tool calls, approvals, stages, rollbacks, model usage and metrics |
+| **Rollback** | A rollback plan is recorded for every mutation; validation failures roll back automatically; impossible rollbacks are stated explicitly |
+| **Loop guards** | Tool-call budget, repeated-call detection and model iteration limits |
+
+Details: [docs/security.md](docs/security.md) · [docs/approvals.md](docs/approvals.md) · [SECURITY.md](SECURITY.md)
 
 ---
 
-## Architecture
+## 🏗️ Architecture
 
 ```text
-                +----------------------+
-                | USER / IDE / MCP CLI |
-                +----------+-----------+
-                           v
-                +----------------------+
-                |    AGENT HARNESS     |  agent/harness.py
-                +----------------------+
-       +-------------------+-------------------+
-       v                   v                   v
-  Orchestrator        Policy Engine      Approval Engine
-       v
-  Specialist Agents (kubernetes, docker, linux, jira, git, cicd, aws, terraform, ansible,
-                     networking, observability, security, incident, documentation)
-       v
-  Tool Executor  ->  policy -> approval -> tool -> audit + task state + rollback plan
-       v
-  Tool Registry (115 tools)  ->  Native | CLI | REST | MCP | SDK backends (real + mock)
+                    ┌──────────────────────────┐
+                    │   USER · IDE · MCP CLIENT │
+                    └─────────────┬────────────┘
+                                  ▼
+                    ┌──────────────────────────┐
+                    │      AGENT HARNESS       │  agent/harness.py
+                    └─────────────┬────────────┘
+            ┌─────────────────────┼─────────────────────┐
+            ▼                     ▼                     ▼
+      Orchestrator          Policy Engine         Approval Engine
+      (lifecycle)         (YAML, outside LLM)   (interactive · allowlist · auto)
+            │
+            ▼
+      Specialist Agents
+      kubernetes · docker · linux · jira · git · cicd · aws · terraform
+      ansible · networking · observability · security · incident · documentation
+            │
+            ▼
+      Tool Executor  →  policy → approval → tool → audit log + task state + rollback plan
+            │
+            ▼
+      Tool Registry (115 tools)
+      Native · CLI · REST · MCP · SDK backends, each with a real and a mock implementation
 ```
 
-Extension points: add a **Tool** (package `build_tools()`), an **Agent** (`Specialist`
-subclass), a **Policy** (`.agent/policy.yaml`), a **Runbook** (YAML), or a **Provider
-adapter** without touching the orchestrator. Details in `docs/architecture.md`.
+| Layer | Location |
+|---|---|
+| CLI and mock API server | `apps/cli`, `apps/mockserver` |
+| Orchestrator, planners, specialists, decider | `agent/orchestrator`, `agent/planners`, `agent/specialists` |
+| Policy, approvals, audit, state, context, memory, RCA, rollback, reports | `agent/policies`, `agent/approvals`, `agent/audit`, `agent/state`, `agent/context`, `agent/memory`, `agent/rca`, `agent/rollback`, `agent/reports` |
+| Tool registry, adapters and integrations | `tools/` (one package per integration) |
+| Model provider adapters | `adapters/openai`, `adapters/claude`, `adapters/opencode`, `adapters/copilot`, `adapters/generic` |
+| Policy and runbooks | `policies/`, `runbooks/` |
+
+**Extension points:** add a *Tool* (package `build_tools()`), an *Agent* (`Specialist` subclass), a *Policy* (`.agent/policy.yaml`), a *Runbook* (YAML) or a *Provider adapter* without touching the orchestrator. See [docs/architecture.md](docs/architecture.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
-## Operations
+## 🔧 Operations
 
-* Task state: `tasks/<ID>/task.json` plus `plan.md`, `evidence.md`, `changes.md`,
-  `validation.md`, `final-report.md`, `incident-report.md`. `devops-agent tasks list|show ID`.
-* Resume: `devops-agent resume ID` / `execute ID` continues from the recorded stage.
-* Audit and metrics: `.agent/audit/audit.jsonl`; the final report embeds tool calls, failures,
-  approvals, policy blocks and model calls.
-* Memory: `.agent/{memory,decisions,runbooks,architecture,incidents,conventions}` markdown, secret-checked.
-* Runbooks: `devops-agent runbooks list|show|find`.
+| Concern | Where |
+|---|---|
+| Durable task state | `tasks/<ID>/task.json` plus `plan.md`, `evidence.md`, `changes.md`, `validation.md`, `final-report.md`, `incident-report.md` |
+| Resume | `devops-agent resume ID` or `execute ID` continues from the recorded stage |
+| Audit and metrics | `.agent/audit/audit.jsonl`; each final report embeds tool calls, failures, approvals, policy blocks and model calls |
+| Project memory | `.agent/{memory,decisions,runbooks,architecture,incidents,conventions}` as secret-checked markdown |
+| Runbooks | `devops-agent runbooks list \| show NAME \| find "text"` |
+| Task inspection | `devops-agent tasks list \| show ID`, `devops-agent tools list` |
 
 ---
 
-## Documentation
+## 📚 Documentation
 
-`docs/integrations.md` (IDE / agent setup), `docs/production.md` (go-live checklist),
-`docs/architecture.md`, `docs/agent-model.md`, `docs/tools.md`, `docs/security.md`,
-`docs/approvals.md`, `docs/jira.md`, `docs/kubernetes.md`, `docs/aws.md`, `docs/terraform.md`,
-`docs/runbooks.md`, `docs/troubleshooting.md`, `docs/development.md`, ADRs in `docs/adr/`.
-`CONTRIBUTING.md`, `SECURITY.md`. License: Apache-2.0.
+| Topic | Document |
+|---|---|
+| IDE and agent setup | [docs/integrations.md](docs/integrations.md) |
+| Production checklist | [docs/production.md](docs/production.md) |
+| Architecture and lifecycle | [docs/architecture.md](docs/architecture.md) |
+| Agent model and specialists | [docs/agent-model.md](docs/agent-model.md) |
+| Tool catalogue and manifest format | [docs/tools.md](docs/tools.md) |
+| Security model | [docs/security.md](docs/security.md) |
+| Approvals | [docs/approvals.md](docs/approvals.md) |
+| Jira workflow | [docs/jira.md](docs/jira.md) |
+| Kubernetes, AWS, Terraform agents | [docs/kubernetes.md](docs/kubernetes.md) · [docs/aws.md](docs/aws.md) · [docs/terraform.md](docs/terraform.md) |
+| Runbooks | [docs/runbooks.md](docs/runbooks.md) |
+| Troubleshooting | [docs/troubleshooting.md](docs/troubleshooting.md) |
+| Development and testing | [docs/development.md](docs/development.md) |
+| Architecture decision records | [docs/adr/](docs/adr) |
+| Contributing and security policy | [CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md) |
+
+---
+
+## Roadmap
+
+| Phase | Status |
+|---|---|
+| **1** CLI, orchestrator, registry, policy, approvals, audit, filesystem/git/jira/docker/kubernetes/linux/github/gitlab, AGENTS.md, task state | ✅ Implemented |
+| **2** AWS, Terraform, Ansible, GitHub Actions, GitLab CI, Trivy, Semgrep, Gitleaks, Checkov | ✅ Implemented (real + mock backends) |
+| **3** Prometheus/Loki correlation, incident response, runbook engine, memory, multi-agent coordination | ✅ Implemented |
+| **4** Multi-repository graph, autonomous remediation policies, pricing-based cost analysis, enterprise RBAC, web UI | 🔜 Extension points documented in [docs/architecture.md](docs/architecture.md) |
+
+---
+
+<div align="center">
+
+Licensed under the [Apache License 2.0](LICENSE).
+
+</div>
