@@ -8,20 +8,44 @@ version = "0.1.0"
 description = "Production-grade, model-agnostic DevOps AI agent harness with policy, approval and audit enforcement outside the LLM."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 authors = [{ name = "DevOps Agent Harness Contributors" }]
+keywords = ["devops", "agent", "ai", "kubernetes", "automation", "llm", "mcp", "harness"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Topic :: System :: Systems Administration",
+]
 dependencies = [
     "pyyaml>=6.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/stwins60/devops-agent-harness"
+Repository = "https://github.com/stwins60/devops-agent-harness"
+Documentation = "https://github.com/stwins60/devops-agent-harness#readme"
+Issues = "https://github.com/stwins60/devops-agent-harness/issues"
+
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "pytest-timeout>=2.1"]
+build = ["build>=1.0.0", "twine>=5.0.0"]
 
 [project.scripts]
 devops-agent = "apps.cli.main:main"
 
 [tool.setuptools.packages.find]
-include = ["agent*", "tools*", "adapters*", "apps*"]
+include = ["agent*", "tools*", "adapters*", "apps*", "examples*", "policies*", "runbooks*", "templates*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "*.yml", "*.md", "*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

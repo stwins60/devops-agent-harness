@@ -50,7 +50,20 @@ def test_listing_commands(tmp_path):
     assert run_cli("--project-root", str(tmp_path), "init").returncode == 0 and (tmp_path / ".agent" / "config.yaml").exists()
 
 
+def test_init_fallback_when_example_missing(tmp_path, monkeypatch):
+    from apps.cli.main import _init, HarnessConfig
+    cfg = HarnessConfig.load(tmp_path)
+    # Ensure _find_example_config returns None to test fallback path
+    monkeypatch.setattr("apps.cli.main._find_example_config", lambda root: None)
+    ret = _init(cfg)
+    assert ret == 0
+    config_file = tmp_path / ".agent" / "config.yaml"
+    assert config_file.exists()
+    assert "mode: approval" in config_file.read_text(encoding="utf-8")
+
+
 def test_help_and_bad_usage():
     assert run_cli().returncode == 2
     assert run_cli("jira").returncode == 2
     assert "--dry-run" in run_cli("--help").stdout
+

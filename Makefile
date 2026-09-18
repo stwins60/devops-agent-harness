@@ -8,11 +8,13 @@ BIN := $(VENV)/bin
 PY := $(BIN)/python
 endif
 
-.PHONY: help venv install test lint demo demo-jira demo-incident demo-plan mock-server up down clean tools runbooks
+.PHONY: help venv install test lint build check-build demo demo-jira demo-incident demo-plan mock-server up down clean tools runbooks
 
 help:
 	@echo "make install      - create venv and install the harness in editable mode"
 	@echo "make test         - run the test-suite"
+	@echo "make build        - build sdist and wheel packages"
+	@echo "make check-build  - validate build artifacts with twine"
 	@echo "make demo         - run the four definition-of-done commands in --mock mode"
 	@echo "make mock-server  - start the mock Jira/GitHub HTTP server on :8089"
 	@echo "make up / down    - docker compose local environment"
@@ -21,13 +23,19 @@ venv:
 	$(PYTHON) -m venv $(VENV)
 
 install: venv
-	$(PY) -m pip install -e ".[dev]"
+	$(PY) -m pip install -e ".[dev,build]"
 
 test:
 	$(PY) -m pytest -q
 
 lint:
 	$(PY) -m compileall -q agent tools adapters apps
+
+build:
+	$(PY) -m build
+
+check-build: build
+	$(PY) -m twine check dist/*
 
 demo:
 	$(PY) -m apps.cli.main --mock "Why is my Kubernetes API deployment failing?"

@@ -251,13 +251,72 @@ def _runbooks(cfg: HarnessConfig, rest: list[str]) -> int:
     return 0
 
 
+_DEFAULT_CONFIG_CONTENT = """# Copy to .agent/config.yaml in the repository you want the agent to operate on.
+# NEVER put secrets here: tokens come from environment variables (GITHUB_TOKEN, JIRA_API_TOKEN, ...).
+mode: approval            # read-only | plan | approval | autonomous
+environment: dev          # declared environment (can only be made stricter by bindings/hints)
+provider: auto            # auto | mock | none | openai | anthropic | claude-code | opencode | copilot | ollama
+provider_model: null
+
+jira_url: https://your-company.atlassian.net
+jira_project: DEVOPS
+github_repo: example-org/sample-app
+git_provider: github      # github | gitlab
+default_namespace: production
+default_repo_path: .      # repository the Jira workflow operates on when the ticket does not name one
+kube_context: null
+aws_profile: null
+aws_region: eu-west-1
+prometheus_url: http://prometheus.monitoring:9090
+loki_url: http://loki.monitoring:3100
+
+environments:
+  production:
+    kube_contexts: [prod-eks, arn:aws:eks:eu-west-1:123456789012:cluster/prod]
+    aws_accounts: ["123456789012"]
+    namespaces: [production]
+    branches: [main, production]
+  staging:
+    kube_contexts: [staging-eks]
+    aws_accounts: ["210987654321"]
+    namespaces: [staging]
+  dev:
+    kube_contexts: [kind-dev, minikube, docker-desktop]
+    namespaces: [dev, default]
+
+limits:
+  max_tool_calls: 200
+  max_iterations: 60
+  max_repeated_calls: 3
+  max_context_chars: 12000
+
+mcp_servers: []
+
+pricing: {}
+"""
+
+
+def _find_example_config(project_root: Path) -> Optional[Path]:
+    candidates = [
+        Path(__file__).resolve().parents[2] / "examples" / "config.example.yaml",
+        project_root / "examples" / "config.example.yaml",
+    ]
+    for p in Path(__file__).resolve().parents:
+        candidates.append(p / "examples" / "config.example.yaml")
+    for c in candidates:
+        if c.exists():
+            return c
+    return None
+
+
 def _init(cfg: HarnessConfig) -> int:
     root = cfg.project_root
     (root / ".agent").mkdir(exist_ok=True)
-    example = Path(__file__).resolve().parents[2] / "examples" / "config.example.yaml"
+    example = _find_example_config(root)
     target = root / ".agent" / "config.yaml"
     if not target.exists():
-        target.write_text(example.read_text(encoding="utf-8"), encoding="utf-8")
+        content = example.read_text(encoding="utf-8") if example and example.exists() else _DEFAULT_CONFIG_CONTENT
+        target.write_text(content, encoding="utf-8")
         print(f"wrote {target}")
     agents = root / "AGENTS.md"
     if not agents.exists():
