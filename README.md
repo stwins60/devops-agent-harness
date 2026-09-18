@@ -117,8 +117,9 @@ RECOMMENDATION: Set readinessProbe port to 8080 in the deployment manifest.
 **Requirements:** Python 3.10+, `git`. Optional CLIs used when present: `kubectl`, `docker`, `aws`, `terraform`, `ansible-playbook`, `trivy`, `semgrep`, `gitleaks`, `checkov`. Missing tools degrade gracefully.
 
 ```bash
-# 1. Install into an isolated environment
-pipx install "git+https://github.com/stwins60/devops-agent-harness.git"
+# 1. Install from PyPI into an isolated environment
+pipx install devops-agent-harness
+# or: pip install devops-agent-harness
 
 # 2. Initialise the repository the agent should operate on
 cd /path/to/your/service-repo

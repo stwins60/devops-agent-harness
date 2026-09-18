@@ -2,7 +2,7 @@
 
 ## 1. Install
 
-* Python 3.10+ in a dedicated virtualenv or `pipx install "git+https://github.com/stwins60/devops-agent-harness.git"`.
+* Python 3.10+ in a dedicated virtualenv or `pipx install devops-agent-harness`.
 * CLIs the agent should be able to use on that machine: `kubectl`, `docker`, `aws`, `terraform`,
   `ansible-playbook`, scanners (`trivy`, `semgrep`, `gitleaks`, `checkov`). Missing tools degrade
   gracefully (`unavailable` failures, never crashes).
