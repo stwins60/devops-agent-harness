@@ -15,3 +15,4 @@ tasks/
 .agent/architecture/
 .agent/conventions/
 .agent/plan.md
+.mockgit/
