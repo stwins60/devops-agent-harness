@@ -5,6 +5,7 @@ one JSON object per line. All payloads pass through redaction first.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import threading
 from collections import Counter, defaultdict
@@ -62,14 +63,21 @@ class AuditLogger:
         self.echo = echo
         self._lock = threading.Lock()
         self.records: list[dict[str, Any]] = []  # in-memory tail for tests / reports
+        self.last_hash: str = "GENESIS"
         if self.path:
             self.path.parent.mkdir(parents=True, exist_ok=True)
 
     def log(self, event: str, **fields: Any) -> dict[str, Any]:
         record: dict[str, Any] = {"timestamp": now_iso(), "event": event}
         record.update(redact(fields))
-        line = json.dumps(record, default=str, sort_keys=False)
+        
         with self._lock:
+            record["prev_hash"] = self.last_hash
+            payload_bytes = json.dumps({k: v for k, v in record.items() if k != "hash"}, sort_keys=True, default=str).encode("utf-8")
+            record["hash"] = hashlib.sha256(self.last_hash.encode("utf-8") + payload_bytes).hexdigest()
+            self.last_hash = record["hash"]
+
+            line = json.dumps(record, default=str, sort_keys=False)
             self.records.append(record)
             if len(self.records) > 5000:
                 self.records = self.records[-2500:]
@@ -125,3 +133,38 @@ class AuditLogger:
         snap = self.metrics.snapshot()
         self.log("metrics", task=task, **snap)
         return snap
+
+    @staticmethod
+    def verify_integrity(path: Path) -> tuple[bool, int, str]:
+        """Verify hash chain integrity of an audit log file."""
+        if not path.exists():
+            return False, 0, f"File not found: {path}"
+
+        lines = [l.strip() for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
+        if not lines:
+            return True, 0, "Log file is empty"
+
+        current_hash = "GENESIS"
+        for idx, line in enumerate(lines, start=1):
+            try:
+                record = json.loads(line)
+            except Exception as exc:
+                return False, idx - 1, f"Line {idx} is invalid JSON: {exc}"
+
+            expected_prev = record.get("prev_hash")
+            record_hash = record.get("hash")
+            if not expected_prev or not record_hash:
+                return False, idx - 1, f"Line {idx} missing hash chain fields"
+
+            if expected_prev != current_hash:
+                return False, idx - 1, f"Line {idx} prev_hash mismatch (expected {current_hash}, got {expected_prev})"
+
+            payload_bytes = json.dumps({k: v for k, v in record.items() if k != "hash"}, sort_keys=True, default=str).encode("utf-8")
+            computed = hashlib.sha256(current_hash.encode("utf-8") + payload_bytes).hexdigest()
+            if computed != record_hash:
+                return False, idx - 1, f"Line {idx} hash verification failed (computed {computed}, recorded {record_hash})"
+
+            current_hash = record_hash
+
+        return True, len(lines), f"Audit log verified cleanly ({len(lines)} records)"
+

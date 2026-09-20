@@ -19,7 +19,7 @@ from typing import Any, Optional
 
 import yaml
 
-from agent.models import Environment, OperatingMode
+from agent.models import AgentIdentity, BlastRadiusLimits, Environment, OperatingMode
 
 
 @dataclass
@@ -68,8 +68,14 @@ class HarnessConfig:
     default_namespace: str = "default"
     default_repo_path: Optional[str] = None
     kube_context: Optional[str] = None
+    kube_configs: dict[str, str] = field(default_factory=dict)
     aws_profile: Optional[str] = None
     aws_region: Optional[str] = None
+    aws_accounts: dict[str, str] = field(default_factory=dict)
+    aws_profiles: list[str] = field(default_factory=list)
+    aws_assume_roles: dict[str, str] = field(default_factory=dict)
+    identity: AgentIdentity = field(default_factory=AgentIdentity)
+    blast_radius: BlastRadiusLimits = field(default_factory=BlastRadiusLimits)
     prometheus_url: Optional[str] = None
     loki_url: Optional[str] = None
     mcp_servers: list[dict[str, Any]] = field(default_factory=list)
@@ -148,6 +154,13 @@ class HarnessConfig:
                 for lk, lv in (value or {}).items():
                     if hasattr(self.limits, lk):
                         setattr(self.limits, lk, int(lv))
+            elif key == "blast_radius":
+                for bk, bv in (value or {}).items():
+                    if hasattr(self.blast_radius, bk):
+                        setattr(self.blast_radius, bk, int(bv))
+            elif key == "identity":
+                if isinstance(value, dict):
+                    self.identity = AgentIdentity(**{k: v for k, v in value.items() if k in AgentIdentity.__dataclass_fields__})
             elif key in ("tasks_dir", "agent_dir"):
                 p = Path(value)
                 setattr(self, key, p if p.is_absolute() else self.project_root / p)
@@ -174,10 +187,15 @@ class HarnessConfig:
                         namespace: Optional[str] = None, host: Optional[str] = None,
                         branch: Optional[str] = None) -> Optional[Environment]:
         """Resolve an environment from trusted bindings only. Returns None if unknown."""
+        # Normalize aws account alias if defined in aws_accounts mapping
+        resolved_account = aws_account
+        if aws_account and aws_account in self.aws_accounts:
+            resolved_account = self.aws_accounts[aws_account]
+
         for b in self.environment_bindings:
-            if kube_context and kube_context in b.kube_contexts:
+            if kube_context and (kube_context in b.kube_contexts or any(kc == kube_context for kc in b.kube_contexts)):
                 return Environment.parse(b.name)
-            if aws_account and aws_account in b.aws_accounts:
+            if resolved_account and (resolved_account in b.aws_accounts or aws_account in b.aws_accounts):
                 return Environment.parse(b.name)
             if namespace and namespace in b.namespaces:
                 return Environment.parse(b.name)
