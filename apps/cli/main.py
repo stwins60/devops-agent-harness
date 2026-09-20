@@ -171,6 +171,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             return _run_task(cfg, f"Fix {task_id}", TaskKind.JIRA, a, task_id=task_id.upper())
         print(f"task '{task_id}' not found in {cfg.tasks_dir}", file=sys.stderr)
         return 1
+    if cmd == "audit":
+        return _audit(cfg, rest)
+    if cmd == "policy":
+        return _policy(cfg, rest)
     if cmd == "tasks":
         return _tasks(cfg, rest)
     if cmd == "tools":
@@ -196,6 +200,41 @@ def main(argv: Optional[list[str]] = None) -> int:
     # free text question
     request = (cmd + " " + text).strip()
     return _run_task(cfg, request, None, a)
+
+
+def _audit(cfg: HarnessConfig, rest: list[str]) -> int:
+    from agent.audit.logger import AuditLogger
+    sub = rest[0] if rest else "verify"
+    if sub == "verify":
+        log_path = Path(rest[1]) if len(rest) > 1 else cfg.agent_dir / "audit.jsonl"
+        ok, count, msg = AuditLogger.verify_integrity(log_path)
+        print(f"Audit log integrity check: {'PASSED' if ok else 'FAILED'}")
+        print(f"Detail: {msg}")
+        return 0 if ok else 1
+    print("usage: devops-agent audit verify [LOG-PATH]", file=sys.stderr)
+    return 2
+
+
+def _policy(cfg: HarnessConfig, rest: list[str]) -> int:
+    from agent.policies.engine import load_policy
+    from agent.policies.testing import PolicyTestSuite
+    sub = rest[0] if rest else "test"
+    if sub == "test":
+        suite_path = Path(rest[1]) if len(rest) > 1 else cfg.project_root / "policies" / "suite.yaml"
+        if not suite_path.exists():
+            print(f"Test suite file not found: {suite_path}", file=sys.stderr)
+            return 1
+        pol = load_policy(cfg.project_root)
+        suite = PolicyTestSuite(pol)
+        results = suite.run_suite_file(suite_path)
+        passed = sum(1 for r in results if r.passed)
+        failed = len(results) - passed
+        print(f"Policy Test Results: {passed} passed, {failed} failed out of {len(results)} tests")
+        for r in results:
+            print(f"  [{'PASS' if r.passed else 'FAIL'}] {r.name} -> {r.detail}")
+        return 0 if failed == 0 else 1
+    print("usage: devops-agent policy test [SUITE-PATH]", file=sys.stderr)
+    return 2
 
 
 def _tasks(cfg: HarnessConfig, rest: list[str]) -> int:

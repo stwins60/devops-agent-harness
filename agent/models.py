@@ -470,3 +470,47 @@ class Links:
             ("Deployment", self.deployment), ("Incident", self.incident),
         ]
         return [f"{k}: {v}" for k, v in items if v]
+
+
+# ---------------------------------------------------------------------------
+# Multi-Target Context, Identity & Guardrails
+# ---------------------------------------------------------------------------
+@dataclass
+class TargetContext:
+    cluster: Optional[str] = None
+    namespace: Optional[str] = None
+    kubeconfig_path: Optional[str] = None
+    aws_account_id: Optional[str] = None
+    aws_region: Optional[str] = None
+    aws_profile: Optional[str] = None
+    role_arn: Optional[str] = None
+    host: Optional[str] = None
+    branch: Optional[str] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class AgentIdentity:
+    agent_id: str = "devops-agent"
+    auth_method: str = "spiffe"  # spiffe|oidc|iam|api_key|local
+    roles: list[str] = field(default_factory=lambda: ["auditor", "operator"])
+    token_ttl: int = 3600
+    issued_at: str = field(default_factory=now_iso)
+    provenance: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class BlastRadiusLimits:
+    max_mutating_calls_per_window: int = 10
+    window_seconds: int = 300
+    max_resource_scope: int = 5
+    circuit_breaker_threshold: int = 3
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+

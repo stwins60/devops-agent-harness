@@ -5,6 +5,7 @@ for a tool call; only this engine decides what happens with it.
 """
 from __future__ import annotations
 
+import time
 import fnmatch
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -12,8 +13,9 @@ from typing import Any, Optional
 
 import yaml
 
-from agent.models import CommandClass, Environment, OperatingMode, PermissionLevel, RiskLevel, ToolSpec
+from agent.models import AgentIdentity, BlastRadiusLimits, CommandClass, Environment, OperatingMode, PermissionLevel, RiskLevel, ToolSpec
 from agent.policies.classifier import Classification, CommandClassifier, rules_from_config
+from agent.policies.rbac import RBACEvaluator
 
 DEFAULT_POLICY_PATH = Path(__file__).resolve().parents[2] / "policies" / "default.yaml"
 
@@ -77,6 +79,7 @@ class Policy:
         self.tool_overrides: dict[str, dict[str, Any]] = dict(data.get("tool_overrides") or {})
         self.command_rules = rules_from_config(data.get("commands") or [])
         self.limits: dict[str, int] = {k: int(v) for k, v in (data.get("limits") or {}).items()}
+        self.roles: dict[str, dict[str, Any]] = dict(data.get("roles") or {})
 
     def env(self, environment: Environment) -> EnvironmentPolicy:
         name = environment.value
@@ -132,6 +135,10 @@ class Policy:
                 dest = merged.setdefault("limits", {})
                 for k, v in (value or {}).items():
                     dest[k] = min(int(dest.get(k, v)), int(v))
+            elif key == "roles":
+                dest = merged.setdefault("roles", {})
+                for role_name, rspec in (value or {}).items():
+                    dest[role_name] = rspec
             elif key == "version":
                 merged["version"] = value
             # any other key from a project policy is ignored: it cannot relax the base policy
@@ -159,10 +166,14 @@ class PolicyEngine:
     def __init__(self, policy: Policy, classifier: Optional[CommandClassifier] = None) -> None:
         self.policy = policy
         self.classifier = classifier or CommandClassifier(extra_rules=policy.command_rules)
+        self.rbac = RBACEvaluator(policy.roles)
+        self.mutation_timestamps: list[float] = []
 
     # ------------------------------------------------------------------
     def evaluate(self, spec: ToolSpec, args: dict[str, Any], *, environment: Environment, mode: OperatingMode,
-                 command: Optional[str] = None, target_branch: Optional[str] = None) -> PolicyDecision:
+                 command: Optional[str] = None, target_branch: Optional[str] = None,
+                 identity: Optional[AgentIdentity] = None,
+                 blast_radius: Optional[BlastRadiusLimits] = None) -> PolicyDecision:
         # Workspace tools (files, git, PRs, tickets) act on the repository/tracker, not on a running
         # environment, so the environment-specific auto-allow/explicit rules do not apply to them.
         # Their own ToolSpec (requires_approval, permission) and the operating mode still do.
@@ -187,6 +198,13 @@ class PolicyEngine:
         if "risk_level" in override:
             risk = max(risk, RiskLevel.parse(override["risk_level"]), key=lambda r: r.rank)
 
+        # RBAC role evaluation if identity provided
+        if identity is not None:
+            rbac_ok, rbac_reason = self.rbac.is_tool_allowed(identity, spec, args)
+            if not rbac_ok:
+                return PolicyDecision(False, False, f"RBAC denial: {rbac_reason}", permission, risk,
+                                      environment=environment)
+
         if command is not None:
             classification = self.classifier.classify(command)
             if classification.forbidden:
@@ -206,7 +224,17 @@ class PolicyEngine:
                                   f"direct push/merge to protected branch '{target_branch}' is not permitted; use a feature branch and a pull request",
                                   PermissionLevel.DEPLOY, RiskLevel.HIGH, classification=classification, environment=environment)
 
-        # 2. operating mode gates ---------------------------------------
+        # 2. blast radius mutation limits -------------------------------
+        if mutating and blast_radius is not None:
+            now = time.time()
+            cutoff = now - blast_radius.window_seconds
+            self.mutation_timestamps = [t for t in self.mutation_timestamps if t > cutoff]
+            if len(self.mutation_timestamps) >= blast_radius.max_mutating_calls_per_window:
+                return PolicyDecision(False, False,
+                                      f"blast radius limit reached: max {blast_radius.max_mutating_calls_per_window} mutations per {blast_radius.window_seconds}s",
+                                      permission, risk, classification=classification, environment=environment)
+
+        # 3. operating mode gates ---------------------------------------
         if mode in (OperatingMode.READ_ONLY, OperatingMode.PLAN):
             if mutating or permission >= PermissionLevel.MODIFY:
                 return PolicyDecision(False, False, f"{mode.value} mode does not permit mutating tools ({permission.name})",
@@ -214,7 +242,7 @@ class PolicyEngine:
             return PolicyDecision(True, False, "read-only operation", permission, risk, classification=classification,
                                   environment=environment)
 
-        # 3. approval requirements --------------------------------------
+        # 4. approval requirements --------------------------------------
         reasons: list[str] = []
         if requires_approval:
             reasons.append("tool requires approval")
@@ -231,8 +259,13 @@ class PolicyEngine:
 
         needs = bool(reasons)
         explicit = needs and (env_policy.explicit_confirmation or permission >= PermissionLevel.DESTROY)
+        
+        if mutating and not needs:
+            self.mutation_timestamps.append(time.time())
+
         return PolicyDecision(True, needs, "; ".join(reasons) if reasons else "auto-allowed by policy", permission, risk,
                               explicit_confirmation=explicit, classification=classification, environment=environment)
 
     def classify(self, command: str) -> Classification:
         return self.classifier.classify(command)
+

@@ -1,0 +1,26 @@
+# Sample Policy-as-Code Test Suite
+tests:
+  - name: verify_read_only_auto_allowed
+    tool: kubectl_get_pods
+    environment: dev
+    mode: approval
+    expected_allowed: true
+    expected_requires_approval: false
+
+  - name: verify_delete_pod_requires_approval
+    tool: kubectl_delete_pod
+    environment: dev
+    mode: approval
+    expected_allowed: true
+    expected_requires_approval: true
+
+  - name: verify_rbac_developer_allowed_namespace
+    tool: kubectl_apply
+    environment: dev
+    mode: autonomous
+    identity:
+      roles: ["developer"]
+    arguments:
+      namespace: dev-test
+    expected_allowed: true
+    expected_requires_approval: false
