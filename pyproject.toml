@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "devops-agent-harness"
-version = "0.3.0"
+version = "0.4.0"
 description = "Production-grade, model-agnostic DevOps AI agent harness with policy, approval and audit enforcement outside the LLM."
 readme = "README.md"
 requires-python = ">=3.10"
