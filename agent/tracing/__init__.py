@@ -22,5 +22,6 @@ from __future__ import annotations
 
 from agent.tracing.base import Span, Tracer, NullTracer
 from agent.tracing.factory import build_tracer
+from agent.tracing.multi import MultiTracer
 
-__all__ = ["Span", "Tracer", "NullTracer", "build_tracer"]
+__all__ = ["Span", "Tracer", "NullTracer", "MultiTracer", "build_tracer"]

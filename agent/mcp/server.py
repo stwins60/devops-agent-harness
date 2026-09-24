@@ -17,6 +17,12 @@ if TYPE_CHECKING:  # pragma: no cover
 
 PROTOCOL_VERSION = "2024-11-05"
 
+try:
+    from importlib.metadata import version as _pkg_version
+    _SERVER_VERSION = _pkg_version("devops-agent-harness")
+except Exception:
+    _SERVER_VERSION = "0.3.0"
+
 
 class HarnessMcpServer:
     def __init__(self, harness: "Harness", max_permission: PermissionLevel = PermissionLevel.DESTROY) -> None:
@@ -33,7 +39,7 @@ class HarnessMcpServer:
         method, params, req_id = msg.get("method"), msg.get("params") or {}, msg.get("id")
         if method == "initialize":
             return self._ok(req_id, {"protocolVersion": PROTOCOL_VERSION, "capabilities": {"tools": {}},
-                                     "serverInfo": {"name": "devops-agent-harness", "version": "0.1.0"}})
+                                     "serverInfo": {"name": "devops-agent-harness", "version": _SERVER_VERSION}})
         if method == "notifications/initialized":
             return None
         if method == "ping":

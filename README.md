@@ -287,16 +287,39 @@ Ready-to-use configuration files for every client are in [`examples/ide/`](examp
 <details open>
 <summary><b>Claude Code</b></summary>
 
+> **`--project-root .` does not work** — Claude Code spawns the MCP server without activating
+> your virtualenv and the cwd may differ. Use the **absolute path** to your repo and the **full
+> binary path**.
+
 ```bash
-claude mcp add devops-agent --scope project -- devops-agent --project-root . --mode approval mcp-serve
+# Find the binary first:
+which devops-agent             # Linux/macOS
+# Windows: where.exe devops-agent  (or use the full .venv\Scripts\devops-agent.exe path)
+
+# Register (creates .mcp.json in the current directory — commit it):
+claude mcp add devops-agent --scope project \
+  -- devops-agent \
+  --project-root /absolute/path/to/your-repo \
+  --mode approval \
+  mcp-serve
+
+claude mcp list   # verify; or type /mcp inside Claude Code
 ```
 
 Equivalent `.mcp.json` ([example](examples/ide/claude-code.mcp.json)):
 
 ```json
-{ "mcpServers": { "devops-agent": { "command": "devops-agent",
-    "args": ["--project-root", ".", "--mode", "approval", "mcp-serve"] } } }
+{
+  "mcpServers": {
+    "devops-agent": {
+      "command": "devops-agent",
+      "args": ["--project-root", "/absolute/path/to/your-repo", "--mode", "approval", "mcp-serve"]
+    }
+  }
+}
 ```
+
+> **Windows**: set `"command"` to the full path `"C:/Users/you/.venv/Scripts/devops-agent.exe"` and use forward slashes.
 
 Copy or symlink `AGENTS.md` to `CLAUDE.md`, run `/mcp` to confirm the connection, then ask for example: *"Use devops-agent to find out why deployment api in production is failing."*
 Reverse direction: `devops-agent --provider claude-code jira DEVOPS-382`.

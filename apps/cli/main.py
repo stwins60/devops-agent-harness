@@ -195,7 +195,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     if cmd == "init":
         return _init(cfg)
     if cmd == "version":
-        print("devops-agent 0.1.0")
+        try:
+            from importlib.metadata import version as _v
+            print(f"devops-agent {_v('devops-agent-harness')}")
+        except Exception:
+            print("devops-agent 0.3.0")
         return 0
     # free text question
     request = (cmd + " " + text).strip()
@@ -332,6 +336,30 @@ limits:
 mcp_servers: []
 
 pricing: {}
+
+# ── Observability tracing (opt-in) ──────────────────────────────────────────
+# Uncomment ONE of the blocks below. All backends support self-hosting via base_url.
+#
+# Single backend:
+# tracing:
+#   backend: langfuse          # langfuse | langsmith | litellm
+#   enabled: true
+#   base_url: https://cloud.langfuse.com          # or http://your-langfuse:3000
+#   public_key: pk-lf-...     # or set LANGFUSE_PUBLIC_KEY env var
+#   secret_key: sk-lf-...     # or set LANGFUSE_SECRET_KEY env var
+#   project: devops-agent
+#
+# Multiple backends (fan-out):
+# tracing:
+#   enabled: true
+#   backends:
+#     - backend: langfuse
+#       base_url: http://langfuse.internal:3000
+#       public_key: pk-lf-...
+#       secret_key: sk-lf-...
+#     - backend: langsmith
+#       base_url: http://langsmith.internal:1984
+#       api_key: ls__...
 """
 
 

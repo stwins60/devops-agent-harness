@@ -49,23 +49,52 @@ Windows: the command is `<venv>\Scripts\devops-agent.exe`; use the full path in 
 
 ## Claude Code
 
+> **Why `--project-root .` does not work**: Claude Code spawns the MCP server process
+> independently (no virtualenv activation, cwd may vary). Always use the **absolute path**
+> to the repo and the **full path** to the binary.
+
 ```bash
-claude mcp add devops-agent --scope project -- devops-agent --project-root . --mode approval mcp-serve
+# 1. Find the binary path (run once)
+which devops-agent                         # Linux/macOS (pipx install)
+# Windows: where.exe devops-agent          # or: .venv\Scripts\devops-agent.exe
+
+# 2. Register as a project-scoped MCP server (creates .mcp.json)
+claude mcp add devops-agent --scope project \
+  -- devops-agent \
+  --project-root /absolute/path/to/your-repo \
+  --mode approval \
+  mcp-serve
+
+# Windows (use full path and forward slashes or escaped backslashes):
+# claude mcp add devops-agent --scope project -- C:/path/to/.venv/Scripts/devops-agent.exe --project-root C:/path/to/your-repo --mode approval mcp-serve
+
+# 3. Verify
 claude mcp list          # or /mcp inside Claude Code
 ```
 
-Project scope writes `.mcp.json` (commit it so the team shares it):
+This writes `.mcp.json` to the project root. **Commit it** so the whole team shares the config:
 
 ```json
 {
   "mcpServers": {
     "devops-agent": {
       "command": "devops-agent",
-      "args": ["--project-root", ".", "--mode", "approval", "mcp-serve"],
+      "args": ["--project-root", "/absolute/path/to/your-repo", "--mode", "approval", "mcp-serve"],
       "env": {}
     }
   }
 }
+```
+
+> **Windows tip**: replace `"command": "devops-agent"` with the full path
+> `"C:/Users/you/.venv/Scripts/devops-agent.exe"` and use forward slashes throughout.
+
+Verify the server manually before connecting an IDE:
+
+```bash
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
+  | devops-agent --project-root /path/to/repo --mode approval mcp-serve
+# should print a JSON response with protocolVersion
 ```
 
 Instructions: Claude Code reads `CLAUDE.md`; copy or symlink `AGENTS.md` to it
@@ -79,6 +108,7 @@ Allow the tools without per-call prompts by adding `mcp__devops-agent__kubectl_g
 
 Reverse direction: `devops-agent --provider claude-code jira DEVOPS-382` runs `claude -p` with a
 structured prompt; the harness parses JSON tool requests and completions.
+
 
 ## OpenCode
 
