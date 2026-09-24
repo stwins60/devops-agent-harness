@@ -173,6 +173,90 @@ Environment variable overrides: `DEVOPS_AGENT_MODE`, `DEVOPS_AGENT_ENV`, `DEVOPS
 
 ---
 
+## 📡 Observability & Tracing
+
+Tracing is **opt-in** and backend-agnostic. When enabled, every LLM call, tool execution and task lifecycle event is forwarded as a structured span to your chosen backend. All backends support **self-hosting** via the `base_url` field — point it at your own instance instead of the vendor cloud.
+
+### Backends
+
+| Backend | Cloud URL | Self-hosted URL |
+|---|---|---|
+| [LangFuse](https://langfuse.com) | `https://cloud.langfuse.com` | `http://your-langfuse:3000` |
+| [LangSmith](https://smith.langchain.com) | `https://api.smith.langchain.com` | `http://your-langsmith:1984` |
+| [LiteLLM](https://docs.litellm.ai) | _(proxy-based)_ | `http://your-litellm-proxy:4000` |
+
+### Installation
+
+```bash
+pip install devops-agent-harness[tracing]        # installs langfuse + langsmith + litellm
+# or individually:
+pip install langfuse                             # LangFuse only
+pip install langsmith                            # LangSmith only
+pip install litellm                              # LiteLLM only
+```
+
+### Configuration
+
+Add a `tracing:` block to `.agent/config.yaml`:
+
+```yaml
+# ── LangFuse (cloud) ────────────────────────────────────────────────────────
+tracing:
+  backend: langfuse
+  enabled: true
+  base_url: https://cloud.langfuse.com          # cloud default
+  public_key: pk-lf-...                         # or set LANGFUSE_PUBLIC_KEY
+  secret_key: sk-lf-...                         # or set LANGFUSE_SECRET_KEY
+  project: devops-agent
+
+# ── LangFuse (self-hosted) ──────────────────────────────────────────────────
+tracing:
+  backend: langfuse
+  enabled: true
+  base_url: http://langfuse.internal:3000       # your self-hosted instance
+  public_key: pk-lf-...
+  secret_key: sk-lf-...
+  project: devops-agent
+
+# ── LangSmith (cloud) ───────────────────────────────────────────────────────
+tracing:
+  backend: langsmith
+  enabled: true
+  base_url: https://api.smith.langchain.com     # cloud default
+  api_key: ls__...                              # or set LANGCHAIN_API_KEY
+  project: devops-agent
+
+# ── LangSmith (self-hosted) ─────────────────────────────────────────────────
+tracing:
+  backend: langsmith
+  enabled: true
+  base_url: http://langsmith.internal:1984      # your self-hosted instance
+  api_key: ls__...
+  project: devops-agent
+
+# ── LiteLLM proxy (forwards traces to 40+ backends) ─────────────────────────
+tracing:
+  backend: litellm
+  enabled: true
+  base_url: http://litellm-proxy.internal:4000
+  success_callback: ["langfuse"]               # any LiteLLM-supported sink
+  failure_callback: ["langfuse"]
+  project: devops-agent
+```
+
+### What gets traced
+
+| Event | Span type | Fields |
+|---|---|---|
+| LLM call | `generation` | model, provider, prompt, completion, token counts, duration |
+| Tool execution | `span` | tool name, inputs, output, success/fail, duration |
+| Task lifecycle | `trace` | task ID, request, status, stage, total duration |
+
+Secrets are **redacted before any span is emitted** — the same redaction layer applied to audit logs applies to traces.
+
+---
+
+
 ## 🧩 Using it from your IDE or coding agent
 
 There are two integration directions and you can use both.

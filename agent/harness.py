@@ -7,6 +7,7 @@ from typing import Any, Optional
 from adapters.generic.mcp import McpConnections
 from agent.approvals.engine import ApprovalEngine, ApprovalHandler, build_handler
 from agent.audit.logger import AuditLogger, Metrics
+from agent.tracing import build_tracer, NullTracer, Tracer
 from agent.config import EnvironmentBinding, HarnessConfig
 from agent.context.collector import ContextEngine
 from agent.executor import ToolExecutor
@@ -25,7 +26,7 @@ from tools.mock.world import MockWorld
 
 class Harness:
     def __init__(self, config: HarnessConfig, *, approval_handler: Optional[ApprovalHandler] = None, world: Optional[MockWorld] = None,
-                 provider: Optional[ModelProvider] = None, echo_audit: bool = False) -> None:
+                 provider: Optional[ModelProvider] = None, echo_audit: bool = False, tracer: Optional[Tracer] = None) -> None:
         self.config = config
         if config.mock and not config.environment_bindings:
             # the mock cluster is bound to production so policies behave realistically in demos and tests
@@ -35,6 +36,7 @@ class Harness:
             config.default_namespace = "production"
         config.agent_dir.mkdir(parents=True, exist_ok=True)
         self.audit = AuditLogger(config.agent_dir / "audit" / "audit.jsonl", Metrics(), echo=echo_audit)
+        self.tracer: Tracer = tracer if tracer is not None else build_tracer(config)
         self.policy = PolicyEngine(load_policy(config.project_root))
         for k, v in self.policy.policy.limits.items():
             if hasattr(config.limits, k):
@@ -50,7 +52,7 @@ class Harness:
         handler = approval_handler or build_handler(interactive=not config.non_interactive, auto_approve=config.auto_approve,
                                                     allow_explicit=bool(config.extra.get("approve_all")))
         self.approvals = ApprovalEngine(handler)
-        self.executor = ToolExecutor(self.registry, self.policy, self.approvals, self.audit, config, self.backends, self.store)
+        self.executor = ToolExecutor(self.registry, self.policy, self.approvals, self.audit, config, self.backends, self.store, tracer=self.tracer)
         self.memory = MemoryStore(config.agent_dir)
         self.runbooks = RunbookLibrary([BUILTIN_RUNBOOK_DIR, config.agent_dir / "runbooks", config.project_root / "runbooks"])
         self.rca = RootCauseEngine()
@@ -99,9 +101,11 @@ class Harness:
 
     def close(self) -> None:
         self.mcp.close()
+        self.tracer.flush()
 
     def summary(self) -> dict[str, Any]:
         return {"mock": self.config.mock, "scenario": self.config.mock_scenario if self.config.mock else None, "mode": self.config.mode.value,
                 "environment": self.config.environment.value, "provider": f"{self.provider.name} ({'available' if self.provider.available() else 'unavailable'})",
                 "tools": len(self.registry), "specialists": sorted(self.specialists), "runbooks": len(self.runbooks.runbooks),
-                "runbook_errors": self.runbooks.errors, "mcp_errors": self.mcp.errors}
+                "runbook_errors": self.runbooks.errors, "mcp_errors": self.mcp.errors,
+                "tracer": type(self.tracer).__name__}

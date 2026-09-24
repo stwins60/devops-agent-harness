@@ -37,6 +37,11 @@ Issues = "https://github.com/stwins60/devops-agent-harness/issues"
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "pytest-timeout>=2.1"]
 build = ["build>=1.0.0", "twine>=5.0.0"]
+tracing = [
+    "langfuse>=2.0",
+    "langsmith>=0.1",
+    "litellm>=1.0",
+]
 
 [project.scripts]
 devops-agent = "apps.cli.main:main"
