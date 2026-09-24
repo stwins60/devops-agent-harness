@@ -22,6 +22,7 @@ from agent.policies.engine import PolicyEngine
 from agent.reports.render import render_plan
 from agent.rollback.engine import RollbackEntry, RollbackPlan
 from agent.state.store import TaskState, TaskStore, ToolCallRecord
+from agent.tracing.base import NullTracer, Tracer
 from tools.adapters import McpTool
 from tools.base import ToolContext, ToolError, classify_exception
 from tools.registry import ToolRegistry
@@ -33,7 +34,7 @@ class LoopGuardError(Exception):
 
 class ToolExecutor:
     def __init__(self, registry: ToolRegistry, policy: PolicyEngine, approvals: ApprovalEngine, audit: AuditLogger, config: HarnessConfig,
-                 backends: dict[str, Any], store: Optional[TaskStore] = None) -> None:
+                 backends: dict[str, Any], store: Optional[TaskStore] = None, tracer: Optional[Tracer] = None) -> None:
         self.registry = registry
         self.policy = policy
         self.approvals = approvals
@@ -41,6 +42,7 @@ class ToolExecutor:
         self.config = config
         self.backends = backends
         self.store = store
+        self.tracer: Tracer = tracer if tracer is not None else NullTracer()
         self._call_counter: dict[str, Counter[str]] = {}
 
     # ------------------------------------------------------------------
@@ -169,6 +171,10 @@ class ToolExecutor:
         status = status or ("dry-run" if result.dry_run else "success" if result.ok else "skipped" if result.skipped else f"error:{result.failure_kind or 'unknown'}")
         self.audit.tool_call(agent=agent, task=task.id, tool=tool_name, arguments=args, risk=risk, permission=permission, approval=approval,
                              result=status, duration=result.duration, error=result.error, environment=task.environment.value, dry_run=result.dry_run)
+        self.tracer.trace_tool(name=f"tool:{tool_name}", tool=tool_name, inputs=redact(args),
+                               output=(result.error or result.text or "")[:500],
+                               success=result.ok, duration=result.duration, task_id=task.id,
+                               metadata={"risk": risk, "permission": permission, "environment": task.environment.value})
         summary = (result.error or result.text)[:400]
         task.tool_calls.append(ToolCallRecord(tool=tool_name, args=redact(args), ok=result.ok, summary=summary, agent=agent, dry_run=result.dry_run, rollback=rollback))
         self._save(task)
